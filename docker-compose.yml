@@ -9,6 +9,7 @@ services:
       - ./db:/etc/x-ui/
       - ./cert:/root/cert/
       - ./acme:/root/.acme.sh/
+      - ./config.json:/app/bin/config.json:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
     environment:
       XRAY_VMESS_AEAD_FORCED: "false"
