@@ -1,0 +1,18 @@
+services:
+  3xui:
+    image: ghcr.io/mhsanaei/3x-ui:v3.6.0
+    container_name: 3xui
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./db:/etc/x-ui/
+      - ./cert:/root/cert/
+      - ./acme:/root/.acme.sh/
+    environment:
+      XRAY_VMESS_AEAD_FORCED: "false"
+      XUI_ENABLE_FAIL2BAN: "true"
+    tty: true
+    ports:
+      - "2053:2053"
+    restart: unless-stopped
