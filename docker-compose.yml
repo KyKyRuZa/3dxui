@@ -13,6 +13,8 @@ services:
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
     tty: true
+    ports:
+      - "2053:2053"
     restart: unless-stopped
     networks:
       - webnet
