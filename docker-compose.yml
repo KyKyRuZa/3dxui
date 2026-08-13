@@ -10,6 +10,8 @@ services:
       - ./cert:/root/cert/
       - ./acme:/root/.acme.sh/
       - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "8383:8383"
     environment:
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
