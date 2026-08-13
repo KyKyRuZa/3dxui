@@ -12,9 +12,11 @@ services:
     environment:
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
+      XUI_PORT: "8383"
+      XUI_INIT_WEB_BASE_PATH: "/x7kP9mQ/"
     tty: true
     ports:
-      - "2053:2053"
+      - "8383:8383"
     restart: unless-stopped
     networks:
       - webnet
