@@ -9,33 +9,11 @@ services:
       - ./db:/etc/x-ui/
       - ./cert:/root/cert/
       - ./acme:/root/.acme.sh/
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     environment:
       XRAY_VMESS_AEAD_FORCED: "false"
       XUI_ENABLE_FAIL2BAN: "true"
       XUI_PORT: "8383"
       XUI_INIT_WEB_BASE_PATH: "/x7kP9mQ/"
     tty: true
-    ports:
-      - "8383:8383"
     restart: unless-stopped
-    networks:
-      - webnet
-
-  nginx:
-    image: nginx:stable-alpine
-    container_name: nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - 3xui
-    networks:
-      - webnet
-
-networks:
-  webnet:
-    driver: bridge
