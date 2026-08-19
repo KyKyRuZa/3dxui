@@ -1,0 +1,29 @@
+.kpis {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.kpi {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+}
+
+.kpiLabel {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.kpiValue {
+  margin-top: 6px;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+@media (min-width: 640px) {
+  .kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

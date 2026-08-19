@@ -1,0 +1,51 @@
+.list {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.name {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.price {
+  color: var(--color-text);
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.price span {
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.perks {
+  color: var(--color-muted);
+  font-size: 14px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cta {
+  margin-top: 8px;
+}
+
+@media (min-width: 640px) {
+  .list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

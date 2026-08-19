@@ -1,0 +1,100 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/spf13/viper"
+)
+
+type Config struct {
+	AppEnv         string
+	Port           string
+	DatabaseURL    string
+	RedisURL       string
+	JWTSecret      string
+	JWTPrivateKey  string
+	CORSDomain     string
+	BotToken       string
+	AdminAPISecret string
+	BotAPISecret   string
+}
+
+func Load() (*Config, error) {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath("/app/config")
+	viper.AddConfigPath("./config")
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		// Config file is optional; we rely on environment variables.
+		fmt.Printf("config file not loaded (using env): %v\n", err)
+	}
+
+	cfg := &Config{
+		AppEnv:         viper.GetString("app_env"),
+		Port:           viper.GetString("port"),
+		DatabaseURL:    viper.GetString("database_url"),
+		RedisURL:       viper.GetString("redis_url"),
+		JWTSecret:      viper.GetString("jwt_secret"),
+		CORSDomain:     viper.GetString("cors_domain"),
+		BotToken:       viper.GetString("bot_token"),
+		AdminAPISecret: viper.GetString("admin_api_secret"),
+		BotAPISecret:   viper.GetString("bot_api_secret"),
+	}
+
+	if cfg.Port == "" {
+		cfg.Port = os.Getenv("PORT")
+	}
+	if cfg.Port == "" {
+		cfg.Port = "8080"
+	}
+	if cfg.AppEnv == "" {
+		cfg.AppEnv = os.Getenv("APP_ENV")
+	}
+	if cfg.AppEnv == "" {
+		cfg.AppEnv = "development"
+	}
+
+	var missing []string
+	if cfg.DatabaseURL == "" {
+		missing = append(missing, "DATABASE_URL")
+	}
+	if cfg.RedisURL == "" {
+		missing = append(missing, "REDIS_URL")
+	}
+	if cfg.JWTSecret == "" {
+		missing = append(missing, "JWT_SECRET")
+	}
+	if cfg.BotToken == "" {
+		missing = append(missing, "BOT_TOKEN")
+	}
+	if len(missing) > 0 {
+		return nil, fmt.Errorf("missing required config: %s", strings.Join(missing, ", "))
+	}
+
+	return cfg, nil
+}
+
+// IsProd reports whether the service runs in production mode.
+func (c *Config) IsProd() bool { return c.AppEnv == "production" }
+
+// CorsOrigins returns the list of allowed CORS origins.
+func (c *Config) CorsOrigins() []string {
+	if c.CORSDomain == "" {
+		return nil
+	}
+	parts := strings.Split(c.CORSDomain, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+var ErrMissingConfig = errors.New("missing required configuration")
