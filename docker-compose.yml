@@ -20,6 +20,7 @@ services:
     ports:
       - "8383:8383"
       - "8443:8443"
+      - "2096:2096"
 
   postgres:
     image: postgres:16-alpine
