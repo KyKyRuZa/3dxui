@@ -3,6 +3,7 @@ package panel
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -78,9 +79,11 @@ func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, exp
 		return nil, err
 	}
 	u := fmt.Sprintf("%s/panel/api/clients/add", c.baseURL)
+	subID := randomSubID()
 	payload := map[string]interface{}{
 		"client": map[string]interface{}{
 			"email":      email,
+			"subId":      subID,
 			"totalGB":    totalGB,
 			"expiryTime": expiryTime,
 			"tgId":       0,
@@ -115,7 +118,21 @@ func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, exp
 	if err := json.Unmarshal(respBody, &wrapper); err == nil && wrapper.Obj != nil && wrapper.Obj.SubID != "" {
 		return wrapper.Obj, nil
 	}
-	return nil, nil
+	return &ClientInfo{
+		Email:      email,
+		SubID:      subID,
+		InboundIDs: inboundIDs,
+	}, nil
+}
+
+func randomSubID() string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = letters[int(b[i])%len(letters)]
+	}
+	return string(b)
 }
 
 type ClientInfo struct {
@@ -154,6 +171,7 @@ func (c *Client) GetClient(ctx context.Context, email string) (*ClientInfo, erro
 		return nil, fmt.Errorf("panel GetClient: empty obj")
 	}
 	if wrapper.Obj.SubID == "" {
+		fmt.Printf("DEBUG GetClient: empty subId for email=%s raw=%s\n", email, string(respBody))
 		for i := 0; i < 10; i++ {
 			time.Sleep(300 * time.Millisecond)
 			resp, err = c.httpClient.Do(req)
