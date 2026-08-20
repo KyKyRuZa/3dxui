@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -20,6 +21,12 @@ type Config struct {
 	BotToken       string
 	AdminAPISecret string
 	BotAPISecret   string
+	PanelURL       string
+	PanelUsername  string
+	PanelPassword  string
+	DefaultInboundIDs   []int
+	DefaultGroup        string
+	PanelPublicURL      string
 }
 
 func Load() (*Config, error) {
@@ -44,6 +51,28 @@ func Load() (*Config, error) {
 		BotToken:       viper.GetString("bot_token"),
 		AdminAPISecret: viper.GetString("admin_api_secret"),
 		BotAPISecret:   viper.GetString("bot_api_secret"),
+		PanelURL:       viper.GetString("panel_url"),
+		PanelUsername:  viper.GetString("panel_username"),
+		PanelPassword:  viper.GetString("panel_password"),
+		DefaultGroup:      viper.GetString("default_group"),
+		PanelPublicURL:    viper.GetString("panel_public_url"),
+	}
+
+	if cfg.DefaultGroup == "" {
+		cfg.DefaultGroup = "Free"
+	}
+
+	inboundIDsStr := viper.GetString("default_inbound_ids")
+	if inboundIDsStr != "" {
+		parts := strings.Split(inboundIDsStr, ",")
+		for _, p := range parts {
+			if n, err := strconv.Atoi(strings.TrimSpace(p)); err == nil {
+				cfg.DefaultInboundIDs = append(cfg.DefaultInboundIDs, n)
+			}
+		}
+	}
+	if len(cfg.DefaultInboundIDs) == 0 {
+		cfg.DefaultInboundIDs = []int{1}
 	}
 
 	if cfg.Port == "" {

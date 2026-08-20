@@ -151,3 +151,47 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID int64) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = $1", userID)
 	return err
 }
+
+func (s *Store) CreateSubscription(ctx context.Context, sub *models.Subscription) error {
+	const q = `
+INSERT INTO subscriptions (user_id, status, panel_email, panel_sub_id, group_name)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, created_at`
+	return s.db.QueryRowContext(ctx, q, sub.UserID, sub.Status, sub.PanelEmail, sub.PanelSubID, sub.GroupName).
+		Scan(&sub.ID, &sub.CreatedAt)
+}
+
+func (s *Store) GetUserSubscription(ctx context.Context, userID int64) (*models.Subscription, error) {
+	sub := &models.Subscription{}
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at
+FROM subscriptions WHERE user_id = $1`, userID).
+		Scan(&sub.ID, &sub.UserID, &sub.Status, &sub.PanelEmail, &sub.PanelSubID, &sub.GroupName, &sub.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return sub, nil
+}
+
+func (s *Store) GetSubscriptionByPanelEmail(ctx context.Context, email string) (*models.Subscription, error) {
+	sub := &models.Subscription{}
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at
+FROM subscriptions WHERE panel_email = $1`, email).
+		Scan(&sub.ID, &sub.UserID, &sub.Status, &sub.PanelEmail, &sub.PanelSubID, &sub.GroupName, &sub.CreatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return sub, nil
+}
+
+func (s *Store) UpdateSubscriptionGroup(ctx context.Context, subID int64, group string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET group_name = $1 WHERE id = $2`, group, subID)
+	return err
+}

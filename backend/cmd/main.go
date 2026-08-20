@@ -11,6 +11,7 @@ import (
 	"github.com/ilyas/vpn-service/backend/internal/db"
 	"github.com/ilyas/vpn-service/backend/internal/handlers"
 	"github.com/ilyas/vpn-service/backend/internal/middleware"
+	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
 	)
 
@@ -49,7 +50,8 @@ func main() {
 	}
 
 	st := store.New(pg)
-	h := handlers.NewHandler(st, jwtSvc, cfg)
+	panelClient := panel.New(cfg.PanelURL, cfg.PanelUsername, cfg.PanelPassword)
+	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient)
 
 	if cfg.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
