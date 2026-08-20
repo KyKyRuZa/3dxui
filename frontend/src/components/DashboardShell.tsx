@@ -12,11 +12,11 @@ export default function DashboardShell() {
   ];
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div style={{ display: "flex", minHeight: "100vh", paddingTop: 64 }}>
       <aside className={styles.sidebar}>
         <Link to="/dashboard" className={styles.brand}>
           <span className={styles.brandIcon}>●</span>
-          Nexus
+          TheNoMoreBlocks
         </Link>
         {links.map((l) => (
           <NavLink

@@ -10,7 +10,7 @@ export default function Navbar() {
       <div className={styles.inner}>
         <Link to="/" className={styles.brand}>
           <span className={styles.brandIcon}>●</span>
-          VPNify
+          TheNoMoreBlocks
         </Link>
 
         <div className={styles.links}>
