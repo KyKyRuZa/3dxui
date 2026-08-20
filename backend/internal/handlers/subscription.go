@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ilyas/vpn-service/backend/internal/models"
+	"github.com/ilyas/vpn-service/backend/internal/panel"
 )
 
 func extractHost(raw string) string {
@@ -184,6 +185,13 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 
 	sub, err := h.store.GetUserSubscription(ctx, userID)
 	if err == nil && sub.Status == "active" {
+		if sub.PanelSubID.String == "" {
+			clientInfo, getErr := h.panel.GetClient(ctx, sub.PanelEmail)
+			if getErr == nil && clientInfo.SubID != "" {
+				sub.PanelSubID = sql.NullString{String: clientInfo.SubID, Valid: true}
+				h.store.UpdateSubscriptionSubID(ctx, sub.ID, clientInfo.SubID)
+			}
+		}
 		links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
 		links = h.rewritePanelLinks(links)
 		publicURL := h.cfg.PanelPublicURL
@@ -221,14 +229,21 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		panelEmail = user.Username
 	}
 
+	var addClientInfo *panel.ClientInfo
+
 	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
 		fmt.Printf("DEBUG activate: creating client in panel email=%s err=%v\n", panelEmail, err)
-		if err := h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs); err != nil {
+		addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs)
+		if err != nil {
 			fmt.Printf("DEBUG activate: AddClient ERROR email=%s err=%v\n", panelEmail, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client in panel"})
 			return
 		}
-		fmt.Printf("DEBUG activate: AddClient OK email=%s\n", panelEmail)
+		if addClientInfo != nil && addClientInfo.SubID != "" {
+			fmt.Printf("DEBUG activate: AddClient OK email=%s subId=%s (from response)\n", panelEmail, addClientInfo.SubID)
+		} else {
+			fmt.Printf("DEBUG activate: AddClient OK email=%s\n", panelEmail)
+		}
 	}
 
 	if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
@@ -238,11 +253,17 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 	fmt.Printf("DEBUG activate: AddToGroup OK email=%s group=%s\n", panelEmail, h.cfg.DefaultGroup)
 
-	clientInfo, err := h.panel.GetClient(ctx, panelEmail)
-	if err != nil {
-		fmt.Printf("DEBUG activate: GetClient ERROR email=%s err=%v\n", panelEmail, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
-		return
+	var clientInfo *panel.ClientInfo
+	if addClientInfo != nil && addClientInfo.SubID != "" {
+		clientInfo = addClientInfo
+	} else {
+		var err error
+		clientInfo, err = h.panel.GetClient(ctx, panelEmail)
+		if err != nil {
+			fmt.Printf("DEBUG activate: GetClient ERROR email=%s err=%v\n", panelEmail, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
+			return
+		}
 	}
 	fmt.Printf("DEBUG activate: GetClient OK email=%s subId=%s inboundIds=%v\n", panelEmail, clientInfo.SubID, clientInfo.InboundIDs)
 

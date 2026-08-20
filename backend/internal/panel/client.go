@@ -73,9 +73,9 @@ func (c *Client) Login(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, expiryTime int64, inboundIDs []int) error {
+func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, expiryTime int64, inboundIDs []int) (*ClientInfo, error) {
 	if err := c.ensureLoggedIn(ctx); err != nil {
-		return err
+		return nil, err
 	}
 	u := fmt.Sprintf("%s/panel/api/clients/add", c.baseURL)
 	payload := map[string]interface{}{
@@ -91,24 +91,31 @@ func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, exp
 	}
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(jsonBody))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("panel AddClient: %s", string(respBody))
+		return nil, fmt.Errorf("panel AddClient: %s", string(respBody))
 	}
-	return nil
+	var wrapper struct {
+		Success bool        `json:"success"`
+		Obj     *ClientInfo `json:"obj"`
+	}
+	if err := json.Unmarshal(respBody, &wrapper); err == nil && wrapper.Obj != nil && wrapper.Obj.SubID != "" {
+		return wrapper.Obj, nil
+	}
+	return nil, nil
 }
 
 type ClientInfo struct {
@@ -147,8 +154,8 @@ func (c *Client) GetClient(ctx context.Context, email string) (*ClientInfo, erro
 		return nil, fmt.Errorf("panel GetClient: empty obj")
 	}
 	if wrapper.Obj.SubID == "" {
-		for i := 0; i < 5; i++ {
-			time.Sleep(200 * time.Millisecond)
+		for i := 0; i < 10; i++ {
+			time.Sleep(300 * time.Millisecond)
 			resp, err = c.httpClient.Do(req)
 			if err != nil {
 				continue

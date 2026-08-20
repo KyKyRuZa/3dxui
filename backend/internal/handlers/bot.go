@@ -12,6 +12,7 @@ import (
 
 	"github.com/ilyas/vpn-service/backend/internal/auth"
 	"github.com/ilyas/vpn-service/backend/internal/models"
+	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
 	"github.com/ilyas/vpn-service/backend/internal/utils"
 )
@@ -55,14 +56,20 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	if err == store.ErrNotFound {
 		panelEmail := user.Username
 
-		if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
-			fmt.Printf("DEBUG botEnsureUser: creating client email=%s err=%v\n", panelEmail, err)
-			if err := h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs); err != nil {
+		var addClientInfo *panel.ClientInfo
+		if _, getErr := h.panel.GetClient(ctx, panelEmail); getErr != nil {
+			fmt.Printf("DEBUG botEnsureUser: creating client email=%s err=%v\n", panelEmail, getErr)
+			addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs)
+			if err != nil {
 				fmt.Printf("DEBUG botEnsureUser: AddClient ERROR email=%s err=%v\n", panelEmail, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client"})
 				return
 			}
-			fmt.Printf("DEBUG botEnsureUser: AddClient OK email=%s\n", panelEmail)
+			if addClientInfo != nil && addClientInfo.SubID != "" {
+				fmt.Printf("DEBUG botEnsureUser: AddClient OK email=%s subId=%s (from response)\n", panelEmail, addClientInfo.SubID)
+			} else {
+				fmt.Printf("DEBUG botEnsureUser: AddClient OK email=%s\n", panelEmail)
+			}
 		}
 
 		if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
@@ -72,11 +79,16 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		}
 		fmt.Printf("DEBUG botEnsureUser: AddToGroup OK email=%s group=%s\n", panelEmail, h.cfg.DefaultGroup)
 
-		clientInfo, err := h.panel.GetClient(ctx, panelEmail)
-		if err != nil {
-			fmt.Printf("DEBUG botEnsureUser: GetClient ERROR email=%s err=%v\n", panelEmail, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
-			return
+		var clientInfo *panel.ClientInfo
+		if addClientInfo != nil && addClientInfo.SubID != "" {
+			clientInfo = addClientInfo
+		} else {
+			clientInfo, err = h.panel.GetClient(ctx, panelEmail)
+			if err != nil {
+				fmt.Printf("DEBUG botEnsureUser: GetClient ERROR email=%s err=%v\n", panelEmail, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
+				return
+			}
 		}
 		fmt.Printf("DEBUG botEnsureUser: GetClient OK email=%s subId=%s\n", panelEmail, clientInfo.SubID)
 
@@ -160,6 +172,14 @@ func (h *Handler) botGetUser(c *gin.Context) {
 			"user":        user.Public(),
 		})
 		return
+	}
+
+	if sub.PanelSubID.String == "" {
+		clientInfo, getErr := h.panel.GetClient(c.Request.Context(), sub.PanelEmail)
+		if getErr == nil && clientInfo.SubID != "" {
+			sub.PanelSubID = sql.NullString{String: clientInfo.SubID, Valid: true}
+			h.store.UpdateSubscriptionSubID(c.Request.Context(), sub.ID, clientInfo.SubID)
+		}
 	}
 
 	links, _ := h.panel.GetLinks(c.Request.Context(), sub.PanelEmail)

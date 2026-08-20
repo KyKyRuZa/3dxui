@@ -195,3 +195,8 @@ func (s *Store) UpdateSubscriptionGroup(ctx context.Context, subID int64, group 
 	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET group_name = $1 WHERE id = $2`, group, subID)
 	return err
 }
+
+func (s *Store) UpdateSubscriptionSubID(ctx context.Context, subID int64, subIDStr string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET panel_sub_id = $1 WHERE id = $2`, subIDStr, subID)
+	return err
+}
