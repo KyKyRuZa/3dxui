@@ -216,9 +216,9 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		return
 	}
 
-	panelEmail := fmt.Sprintf("user_%d@vpn.local", userID)
+	panelEmail := user.Username
 	if user.TelegramID.Valid {
-		panelEmail = fmt.Sprintf("tg_%d@tg", user.TelegramID.Int64)
+		panelEmail = user.Username
 	}
 
 	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {

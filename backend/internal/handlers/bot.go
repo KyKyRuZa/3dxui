@@ -53,7 +53,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 
 	sub, err := h.store.GetUserSubscription(ctx, user.ID)
 	if err == store.ErrNotFound {
-		panelEmail := fmt.Sprintf("tg_%d@tg", body.TelegramID)
+		panelEmail := user.Username
 
 		if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
 			fmt.Printf("DEBUG botEnsureUser: creating client email=%s err=%v\n", panelEmail, err)
