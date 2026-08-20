@@ -12,6 +12,60 @@ import (
 	"github.com/ilyas/vpn-service/backend/internal/models"
 )
 
+func extractHost(raw string) string {
+	if idx := strings.Index(raw, "://"); idx >= 0 {
+		raw = raw[idx+3:]
+	}
+	if idx := strings.Index(raw, "/"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	if idx := strings.Index(raw, ":"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	return raw
+}
+
+func rewriteLinkHost(link, oldHost, newHost string) string {
+	if oldHost == "" || newHost == "" || oldHost == newHost {
+		return link
+	}
+	if idx := strings.Index(link, "://"); idx >= 0 {
+		afterProto := link[idx+3:]
+		var authority, rest string
+		if qIdx := strings.Index(afterProto, "?"); qIdx >= 0 {
+			authority = afterProto[:qIdx]
+			rest = afterProto[qIdx:]
+		} else if hashIdx := strings.Index(afterProto, "#"); hashIdx >= 0 {
+			authority = afterProto[:hashIdx]
+			rest = afterProto[hashIdx:]
+		} else {
+			authority = afterProto
+			rest = ""
+		}
+		if strings.Contains(authority, oldHost) {
+			newAuthority := strings.Replace(authority, oldHost, newHost, 1)
+			return link[:idx+3] + newAuthority + rest
+		}
+	}
+	return link
+}
+
+func (h *Handler) rewritePanelLinks(links []string) []string {
+	internalHost := extractHost(h.cfg.PanelURL)
+	publicURL := h.cfg.PanelPublicURL
+	if publicURL == "" {
+		publicURL = h.cfg.PanelURL
+	}
+	publicHost := extractHost(publicURL)
+	if internalHost == "" || publicHost == "" || internalHost == publicHost {
+		return links
+	}
+	for i, link := range links {
+		links[i] = rewriteLinkHost(link, internalHost, publicHost)
+	}
+	return links
+}
+
 func (h *Handler) getSubscription(c *gin.Context) {
 	userID, ok := userIDFromContext(c)
 	if !ok {
@@ -53,6 +107,8 @@ func (h *Handler) getVLESSConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get links"})
 		return
 	}
+
+	links = h.rewritePanelLinks(links)
 
 	var vlessLink string
 	for _, link := range links {
@@ -101,6 +157,19 @@ func (h *Handler) getSingBoxConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read subscription"})
 		return
 	}
+
+	internalHost := extractHost(h.cfg.PanelURL)
+	publicURL = h.cfg.PanelPublicURL
+	if publicURL == "" {
+		publicURL = h.cfg.PanelURL
+	}
+	publicHost := extractHost(publicURL)
+	if internalHost != "" && publicHost != "" && internalHost != publicHost {
+		if strings.Contains(string(content), internalHost) {
+			content = []byte(strings.ReplaceAll(string(content), internalHost, publicHost))
+		}
+	}
+
 	c.Data(http.StatusOK, "application/json", content)
 }
 
@@ -116,6 +185,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	sub, err := h.store.GetUserSubscription(ctx, userID)
 	if err == nil && sub.Status == "active" {
 		links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
+		links = h.rewritePanelLinks(links)
 		publicURL := h.cfg.PanelPublicURL
 		if publicURL == "" {
 			publicURL = h.cfg.PanelURL
@@ -195,6 +265,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		publicURL = h.cfg.PanelURL
 	}
 	links, _ := h.panel.GetLinks(ctx, panelEmail)
+	links = h.rewritePanelLinks(links)
 	subURL := fmt.Sprintf("%s/sub/%s", strings.TrimRight(publicURL, "/"), clientInfo.SubID)
 
 	var vlessLink string

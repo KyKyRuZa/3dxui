@@ -81,11 +81,11 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		fmt.Printf("DEBUG botEnsureUser: GetClient OK email=%s subId=%s\n", panelEmail, clientInfo.SubID)
 
 		sub = &models.Subscription{
-			UserID:      user.ID,
-			PanelEmail:  panelEmail,
-			PanelSubID:  sql.NullString{String: clientInfo.SubID, Valid: clientInfo.SubID != ""},
-			GroupName:   h.cfg.DefaultGroup,
-			Status:      "active",
+			UserID:     user.ID,
+			PanelEmail: panelEmail,
+			PanelSubID: sql.NullString{String: clientInfo.SubID, Valid: clientInfo.SubID != ""},
+			GroupName:  h.cfg.DefaultGroup,
+			Status:     "active",
 		}
 		if err := h.store.CreateSubscription(ctx, sub); err != nil {
 			fmt.Printf("DEBUG botEnsureUser: CreateSubscription ERROR userID=%d err=%v\n", user.ID, err)
@@ -99,6 +99,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	}
 
 	links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
+	links = h.rewritePanelLinks(links)
 	publicURL := h.cfg.PanelPublicURL
 	if publicURL == "" {
 		publicURL = h.cfg.PanelURL
@@ -119,6 +120,18 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read subscription"})
 		return
+	}
+
+	internalHost := extractHost(h.cfg.PanelURL)
+	publicURL = h.cfg.PanelPublicURL
+	if publicURL == "" {
+		publicURL = h.cfg.PanelURL
+	}
+	publicHost := extractHost(publicURL)
+	if internalHost != "" && publicHost != "" && internalHost != publicHost {
+		if strings.Contains(string(singbox), internalHost) {
+			singbox = []byte(strings.ReplaceAll(string(singbox), internalHost, publicHost))
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -150,6 +163,7 @@ func (h *Handler) botGetUser(c *gin.Context) {
 	}
 
 	links, _ := h.panel.GetLinks(c.Request.Context(), sub.PanelEmail)
+	links = h.rewritePanelLinks(links)
 	publicURL := h.cfg.PanelPublicURL
 	if publicURL == "" {
 		publicURL = h.cfg.PanelURL
