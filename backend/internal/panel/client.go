@@ -146,6 +146,26 @@ func (c *Client) GetClient(ctx context.Context, email string) (*ClientInfo, erro
 	if wrapper.Obj == nil {
 		return nil, fmt.Errorf("panel GetClient: empty obj")
 	}
+	if wrapper.Obj.SubID == "" {
+		for i := 0; i < 5; i++ {
+			time.Sleep(200 * time.Millisecond)
+			resp, err = c.httpClient.Do(req)
+			if err != nil {
+				continue
+			}
+			respBody, _ = io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				continue
+			}
+			if err := json.Unmarshal(respBody, &wrapper); err != nil || wrapper.Obj == nil {
+				continue
+			}
+			if wrapper.Obj.SubID != "" {
+				break
+			}
+		}
+	}
 	return wrapper.Obj, nil
 }
 
