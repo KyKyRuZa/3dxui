@@ -17,11 +17,12 @@ type Client struct {
 	baseURL    string
 	username   string
 	password   string
+	apiToken   string
 	httpClient *http.Client
 	loggedIn   bool
 }
 
-func New(baseURL, username, password string) *Client {
+func New(baseURL, username, password, apiToken string) *Client {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -29,12 +30,21 @@ func New(baseURL, username, password string) *Client {
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		username:   username,
 		password:   password,
+		apiToken:   apiToken,
 		httpClient: &http.Client{Transport: tr, Timeout: 15 * time.Second},
 	}
 }
 
+func (c *Client) usingToken() bool {
+	return c.apiToken != ""
+}
+
 func (c *Client) ensureLoggedIn(ctx context.Context) error {
 	if c.loggedIn {
+		return nil
+	}
+	if c.usingToken() {
+		c.loggedIn = true
 		return nil
 	}
 	if err := c.Login(ctx); err != nil {
@@ -88,6 +98,7 @@ func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, exp
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -115,6 +126,7 @@ func (c *Client) GetClient(ctx context.Context, email string) (*ClientInfo, erro
 	if err != nil {
 		return nil, err
 	}
+	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -146,6 +158,7 @@ func (c *Client) GetLinks(ctx context.Context, email string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -173,6 +186,7 @@ func (c *Client) GetSubLinks(ctx context.Context, subID string) ([]string, error
 	if err != nil {
 		return nil, err
 	}
+	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -209,6 +223,7 @@ func (c *Client) AddToGroup(ctx context.Context, emails []string, group string) 
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -238,6 +253,7 @@ func (c *Client) RemoveFromGroup(ctx context.Context, emails []string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
@@ -248,4 +264,10 @@ func (c *Client) RemoveFromGroup(ctx context.Context, emails []string) error {
 		return fmt.Errorf("panel RemoveFromGroup: %s", string(respBody))
 	}
 	return nil
+}
+
+func (c *Client) setAuthHeader(req *http.Request) {
+	if c.apiToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiToken)
+	}
 }

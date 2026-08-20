@@ -50,7 +50,7 @@ func main() {
 	}
 
 	st := store.New(pg)
-	panelClient := panel.New(cfg.PanelURL, cfg.PanelUsername, cfg.PanelPassword)
+	panelClient := panel.New(cfg.PanelURL, cfg.PanelUsername, cfg.PanelPassword, cfg.PanelAPIToken)
 	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient)
 
 	if cfg.IsProd() {

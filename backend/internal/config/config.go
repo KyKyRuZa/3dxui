@@ -11,22 +11,23 @@ import (
 )
 
 type Config struct {
-	AppEnv         string
-	Port           string
-	DatabaseURL    string
-	RedisURL       string
-	JWTSecret      string
-	JWTPrivateKey  string
-	CORSDomain     string
-	BotToken       string
-	AdminAPISecret string
-	BotAPISecret   string
-	PanelURL       string
-	PanelUsername  string
-	PanelPassword  string
-	DefaultInboundIDs   []int
-	DefaultGroup        string
-	PanelPublicURL      string
+	AppEnv           string
+	Port             string
+	DatabaseURL      string
+	RedisURL         string
+	JWTSecret        string
+	JWTPrivateKey    string
+	CORSDomain       string
+	BotToken         string
+	AdminAPISecret   string
+	BotAPISecret     string
+	PanelURL         string
+	PanelUsername    string
+	PanelPassword    string
+	PanelAPIToken    string
+	DefaultInboundIDs []int
+	DefaultGroup       string
+	PanelPublicURL     string
 }
 
 func Load() (*Config, error) {
@@ -54,6 +55,7 @@ func Load() (*Config, error) {
 		PanelURL:       viper.GetString("panel_url"),
 		PanelUsername:  viper.GetString("panel_username"),
 		PanelPassword:  viper.GetString("panel_password"),
+		PanelAPIToken:  viper.GetString("panel_api_token"),
 		DefaultGroup:      viper.GetString("default_group"),
 		PanelPublicURL:    viper.GetString("panel_public_url"),
 	}
