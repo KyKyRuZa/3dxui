@@ -152,22 +152,29 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 
 	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
+		fmt.Printf("DEBUG activate: creating client in panel email=%s err=%v\n", panelEmail, err)
 		if err := h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs); err != nil {
+			fmt.Printf("DEBUG activate: AddClient ERROR email=%s err=%v\n", panelEmail, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client in panel"})
 			return
 		}
+		fmt.Printf("DEBUG activate: AddClient OK email=%s\n", panelEmail)
 	}
 
 	if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
+		fmt.Printf("DEBUG activate: AddToGroup ERROR email=%s group=%s err=%v\n", panelEmail, h.cfg.DefaultGroup, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add to group"})
 		return
 	}
+	fmt.Printf("DEBUG activate: AddToGroup OK email=%s group=%s\n", panelEmail, h.cfg.DefaultGroup)
 
 	clientInfo, err := h.panel.GetClient(ctx, panelEmail)
 	if err != nil {
+		fmt.Printf("DEBUG activate: GetClient ERROR email=%s err=%v\n", panelEmail, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
 		return
 	}
+	fmt.Printf("DEBUG activate: GetClient OK email=%s subId=%s inboundIds=%v\n", panelEmail, clientInfo.SubID, clientInfo.InboundIDs)
 
 	sub = &models.Subscription{
 		UserID:     userID,
@@ -177,9 +184,11 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		Status:     "active",
 	}
 	if err := h.store.CreateSubscription(ctx, sub); err != nil {
+		fmt.Printf("DEBUG activate: CreateSubscription ERROR userID=%d err=%v\n", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save subscription"})
 		return
 	}
+	fmt.Printf("DEBUG activate: CreateSubscription OK userID=%d subId=%s\n", userID, clientInfo.SubID)
 
 	publicURL := h.cfg.PanelPublicURL
 	if publicURL == "" {

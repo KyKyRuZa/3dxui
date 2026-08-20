@@ -56,22 +56,29 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		panelEmail := fmt.Sprintf("tg_%d@tg", body.TelegramID)
 
 		if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
+			fmt.Printf("DEBUG botEnsureUser: creating client email=%s err=%v\n", panelEmail, err)
 			if err := h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs); err != nil {
+				fmt.Printf("DEBUG botEnsureUser: AddClient ERROR email=%s err=%v\n", panelEmail, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client"})
 				return
 			}
+			fmt.Printf("DEBUG botEnsureUser: AddClient OK email=%s\n", panelEmail)
 		}
 
 		if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
+			fmt.Printf("DEBUG botEnsureUser: AddToGroup ERROR email=%s group=%s err=%v\n", panelEmail, h.cfg.DefaultGroup, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add to group"})
 			return
 		}
+		fmt.Printf("DEBUG botEnsureUser: AddToGroup OK email=%s group=%s\n", panelEmail, h.cfg.DefaultGroup)
 
 		clientInfo, err := h.panel.GetClient(ctx, panelEmail)
 		if err != nil {
+			fmt.Printf("DEBUG botEnsureUser: GetClient ERROR email=%s err=%v\n", panelEmail, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
 			return
 		}
+		fmt.Printf("DEBUG botEnsureUser: GetClient OK email=%s subId=%s\n", panelEmail, clientInfo.SubID)
 
 		sub = &models.Subscription{
 			UserID:      user.ID,
@@ -81,9 +88,11 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			Status:      "active",
 		}
 		if err := h.store.CreateSubscription(ctx, sub); err != nil {
+			fmt.Printf("DEBUG botEnsureUser: CreateSubscription ERROR userID=%d err=%v\n", user.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
+		fmt.Printf("DEBUG botEnsureUser: CreateSubscription OK userID=%d subId=%s\n", user.ID, clientInfo.SubID)
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
