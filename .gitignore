@@ -7,15 +7,43 @@ db/*
 dist
 dist-ssr
 *.log
+vendor/
 
 # OS / editor
 .DS_Store
 .idea
 .vscode/*
+.vscode/
 !.vscode/extensions.json
 
 # Secrets / credentials
 nginx/certs/
+nginx/logs/
 
 # Panel data
 3dxui-data/
+
+# Local docker overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Go build binary
+server
+
+# Env variants
+.envrc
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# Editor temp files
+*~
+*.swp
+*.swo
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3

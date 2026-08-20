@@ -7,3 +7,8 @@ dist-ssr
 .vite-hooks
 *.log
 npm-debug.log*
+backend/
+nginx/
+bot/
+.env*
+docker-compose*.yml

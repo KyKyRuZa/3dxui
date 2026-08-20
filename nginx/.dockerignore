@@ -1,9 +1,10 @@
 .git
 .gitignore
 *.md
+backend/
 frontend/
-nginx/
 bot/
 .env*
 docker-compose*.yml
-*.log
+logs/
+certs/
