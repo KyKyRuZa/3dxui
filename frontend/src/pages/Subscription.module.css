@@ -1,3 +1,8 @@
+.cardTitle {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
 .keyBox {
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
@@ -37,4 +42,12 @@
   border-radius: var(--radius-sm);
   background: #fff;
   padding: 8px;
+}
+
+.sectionFlush {
+  padding: 0;
+}
+
+.cardMt {
+  margin-top: 16px;
 }

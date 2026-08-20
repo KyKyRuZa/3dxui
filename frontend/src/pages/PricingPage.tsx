@@ -5,8 +5,8 @@ export default function PricingPage() {
   return (
     <div className={styles.root}>
       <div className="container section">
-        <h1 style={{ fontSize: 32, fontWeight: 800 }}>Тарифы</h1>
-        <p style={{ color: "var(--color-muted)", marginTop: 8 }}>
+        <h1 className={styles.pageTitle}>Тарифы</h1>
+        <p className={styles.pageSubtitle}>
           Выберите подписку, которая подходит вам.
         </p>
       </div>

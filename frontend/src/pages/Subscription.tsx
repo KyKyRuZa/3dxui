@@ -9,7 +9,7 @@ export default function Subscription() {
   const { user } = useAuth();
   const [sub, setSub] = useState<Sub | null>(null);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState<"link" | "vless" | "key" | null>(null);
+  const [copied, setCopied] = useState<"link" | "vless" | null>(null);
   const [qrUrl, setQrUrl] = useState("");
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function Subscription() {
     }
   }, [sub?.vless]);
 
-  const copy = async (text: string, which: "link" | "vless" | "key") => {
+  const copy = async (text: string, which: "link" | "vless") => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(which);
@@ -35,30 +35,11 @@ export default function Subscription() {
   };
 
   return (
-    <div className="section" style={{ padding: 0 }}>
+    <div className={`section ${styles.sectionFlush}`}>
       {error && <div className={styles.error}>{error}</div>}
 
       <div className="card">
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Группа</div>
-        <div className={styles.value}>{sub?.group ?? "—"}</div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Имя пользователя</div>
-        <div className={styles.value}>{sub?.username ?? "—"}</div>
-        <div className={styles.actions}>
-          <Button
-            variant="secondary"
-            disabled={!sub}
-            onClick={() => sub && copy(sub.username, "key")}
-          >
-            {copied === "key" ? "Скопировано" : "Скопировать"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>QR код (VLESS)</div>
+        <div className={styles.cardTitle}>QR код (VLESS)</div>
         {qrUrl ? (
           <div className={styles.qrWrap}>
             <img src={qrUrl} alt="QR код" className={styles.qrImage} />
@@ -73,8 +54,8 @@ export default function Subscription() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>VLESS ссылка</div>
+      <div className={`card ${styles.cardMt}`}>
+        <div className={styles.cardTitle}>VLESS ссылка</div>
         {sub ? (
           <div className={styles.keyBox}>{sub.vless}</div>
         ) : (
@@ -87,8 +68,8 @@ export default function Subscription() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Ссылка подписки</div>
+      <div className={`card ${styles.cardMt}`}>
+        <div className={styles.cardTitle}>Ссылка подписки</div>
         {sub ? (
           <div className={styles.keyBox}>{sub.subscription_url}</div>
         ) : (

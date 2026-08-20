@@ -10,9 +10,11 @@ const items = [
   { title: "macOS / Linux", desc: "Импортируйте подписку через клиентское приложение." },
 ];
 
+const recommended = "Рекомендуемое приложение — Happ: универсальный клиент для всех платформ.";
+
 export default function Instructions() {
   return (
-    <div className="section" style={{ padding: 0 }}>
+    <div className={`section ${styles.sectionFlush}`}>
       <div className={styles.grid}>
         {items.map((it) => (
           <div key={it.title} className={styles.item}>
@@ -21,6 +23,8 @@ export default function Instructions() {
           </div>
         ))}
       </div>
+
+      <p className={styles.recommended}>{recommended}</p>
     </div>
   );
 }

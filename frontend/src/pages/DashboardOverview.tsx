@@ -31,18 +31,18 @@ export default function DashboardOverview() {
       </div>
 
       {sub && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Ссылка подписки</div>
-          <div className={styles.kpiValue} style={{ fontSize: 14, wordBreak: "break-all" }}>
+        <div className={`card ${styles.cardMb}`}>
+          <div className={styles.cardTitle}>Ссылка подписки</div>
+          <div className={`${styles.kpiValue} ${styles.subValue}`}>
             {sub.subscription_url}
           </div>
         </div>
       )}
 
-      <div className="section" style={{ padding: 0 }}>
+      <div className={`section ${styles.sectionFlush}`}>
         <div className="card">
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>Быстрый старт</div>
-          <ol style={{ paddingLeft: 18, color: "var(--color-muted)", fontSize: 14, lineHeight: 2 }}>
+          <div className={styles.cardTitle}>Быстрый старт</div>
+          <ol className={styles.steps}>
             <li>Установите клиентское приложение на ваше устройство</li>
             <li>Импортируйте ссылку из раздела «Подписка»</li>
             <li>Подключитесь к любому серверу</li>

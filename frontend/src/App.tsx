@@ -18,7 +18,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
   if (loading) {
     return (
-      <div className="container" style={{ paddingTop: 100 }}>
+      <div className={`container ${styles.loadingState}`}>
         Загрузка…
       </div>
     );
@@ -33,7 +33,7 @@ export default function App() {
       <Navbar />
       <Suspense
         fallback={
-          <div className="container" style={{ paddingTop: 100 }}>
+          <div className={`container ${styles.loadingState}`}>
             Загрузка…
           </div>
         }

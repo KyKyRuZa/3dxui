@@ -27,3 +27,28 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.cardTitle {
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.cardMb {
+  margin-bottom: 16px;
+}
+
+.sectionFlush {
+  padding: 0;
+}
+
+.subValue {
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.steps {
+  padding-left: 18px;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 2;
+}

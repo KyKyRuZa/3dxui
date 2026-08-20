@@ -57,3 +57,17 @@ input {
   color: inherit;
   background: transparent;
 }
+
+.pageTitle {
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.pageSubtitle {
+  color: var(--color-muted);
+  margin-top: 8px;
+}
+
+.loadingState {
+  padding-top: 100px;
+}

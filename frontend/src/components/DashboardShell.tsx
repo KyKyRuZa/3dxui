@@ -5,14 +5,14 @@ export default function DashboardShell() {
   const location = useLocation();
 
   const links = [
-    { to: "/dashboard", label: "Обзор", end: true },
+    { to: "/dashboard", label: "Профиль", end: true },
     { to: "/dashboard/subscription", label: "Подписка" },
     { to: "/dashboard/instructions", label: "Инструкции" },
     { to: "/dashboard/settings", label: "Настройки" },
   ];
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", paddingTop: 64 }}>
+    <div className={styles.shell}>
       <aside className={styles.sidebar}>
         <Link to="/dashboard" className={styles.brand}>
           <span className={styles.brandIcon}>●</span>
@@ -30,10 +30,10 @@ export default function DashboardShell() {
         ))}
       </aside>
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div className={styles.main}>
         <header className={styles.header}>
-          <div style={{ fontWeight: 600 }}>
-            {location.pathname === "/dashboard" && "Обзор"}
+          <div className={styles.headerTitle}>
+            {location.pathname === "/dashboard" && "Профиль"}
             {location.pathname === "/dashboard/subscription" && "Подписка"}
             {location.pathname === "/dashboard/instructions" && "Инструкции"}
             {location.pathname === "/dashboard/settings" && "Настройки"}
