@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import * as authApi from "../api/auth";
-import { registerAuthFail, setAccessToken } from "../api/axios";
-import type { User } from "../api/auth";
+import * as authApi from "@api/auth";
+import { registerAuthFail, setAccessToken } from "@api/axios";
+import type { User } from "@api/auth";
 
 interface AuthContextValue {
   user: User | null;

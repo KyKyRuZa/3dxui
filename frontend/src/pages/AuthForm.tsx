@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button } from "../components/Button";
-import { useAuth } from "../hooks/useAuth";
-import styles from "./Auth.module.css";
+import { Button } from "@components/Button";
+import { useAuth } from "@hooks/useAuth";
+import styles from "@styles/Auth.module.css";
 
 function errorMessage(err: unknown): string {
   const data = (err as { response?: { data?: { error?: string } } })?.response?.data;

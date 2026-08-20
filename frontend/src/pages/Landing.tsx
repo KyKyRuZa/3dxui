@@ -1,7 +1,7 @@
-import Hero from "../components/Hero";
-import Features from "../components/Features";
-import PricingCards from "../components/PricingCards";
-import styles from "../styles/global.module.css";
+import Hero from "@components/Hero";
+import Features from "@components/Features";
+import PricingCards from "@components/PricingCards";
+import styles from "@styles/global.module.css";
 
 export default function Landing() {
   return (

@@ -13,13 +13,20 @@ export interface VLESSConfig {
   username: string;
 }
 
+let cachedActivate: Subscription | null = null;
+let cachedGet: Subscription | null = null;
+
 export async function activateSubscription(): Promise<Subscription> {
+  if (cachedActivate) return cachedActivate;
   const { data } = await api.post<Subscription>("/subscription/activate");
+  cachedActivate = data;
   return data;
 }
 
 export async function getSubscription(): Promise<Subscription> {
+  if (cachedGet) return cachedGet;
   const { data } = await api.get<Subscription>("/subscription");
+  cachedGet = data;
   return data;
 }
 

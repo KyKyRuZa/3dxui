@@ -1,5 +1,5 @@
-import PricingCards from "../components/PricingCards";
-import styles from "../styles/global.module.css";
+import PricingCards from "@components/PricingCards";
+import styles from "@styles/global.module.css";
 
 export default function PricingPage() {
   return (

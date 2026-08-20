@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { Button } from "./Button";
-import styles from "./PricingCards.module.css";
+import { Button } from "@components/Button";
+import styles from "@styles/PricingCards.module.css";
 
 const plans = [
   {

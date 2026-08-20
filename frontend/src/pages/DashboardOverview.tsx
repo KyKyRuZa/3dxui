@@ -1,17 +1,8 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../hooks/useAuth";
-import { getSubscription, type Subscription as Sub } from "../api/subscription";
-import styles from "./DashboardOverview.module.css";
+import { useAuth } from "@hooks/useAuth";
+import styles from "@styles/DashboardOverview.module.css";
 
 export default function DashboardOverview() {
   const { user } = useAuth();
-  const [sub, setSub] = useState<Sub | null>(null);
-
-  useEffect(() => {
-    getSubscription()
-      .then(setSub)
-      .catch(() => setSub(null));
-  }, [user?.id]);
 
   const metrics = [
     { label: "Статус", value: user?.is_active ? "Активна" : "Неактивна" },
@@ -29,15 +20,6 @@ export default function DashboardOverview() {
           </div>
         ))}
       </div>
-
-      {sub && (
-        <div className={`card ${styles.cardMb}`}>
-          <div className={styles.cardTitle}>Ссылка подписки</div>
-          <div className={`${styles.kpiValue} ${styles.subValue}`}>
-            {sub.subscription_url}
-          </div>
-        </div>
-      )}
 
       <div className={`section ${styles.sectionFlush}`}>
         <div className="card">

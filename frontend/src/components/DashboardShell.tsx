@@ -1,5 +1,5 @@
 import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
-import styles from "./DashboardShell.module.css";
+import styles from "@styles/DashboardShell.module.css";
 
 export default function DashboardShell() {
   const location = useLocation();

@@ -1,8 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Button } from "../components/Button";
-import { useAuth } from "../hooks/useAuth";
-import { getProfile, updateProfile, changePassword } from "../api/auth";
-import styles from "./Settings.module.css";
+import { Button } from "@components/Button";
+import { useAuth } from "@hooks/useAuth";
+import { getProfile, updateProfile, changePassword } from "@api/auth";
+import styles from "@styles/Settings.module.css";
 
 function errorMessage(err: unknown): string {
   const data = (err as { response?: { data?: { error?: string } } })?.response?.data;

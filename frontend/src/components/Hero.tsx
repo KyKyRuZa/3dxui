@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { Button } from "./Button";
-import styles from "./Hero.module.css";
+import { Button } from "@components/Button";
+import styles from "@styles/Hero.module.css";
 
 export default function Hero() {
   return (

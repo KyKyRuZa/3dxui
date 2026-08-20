@@ -1,18 +1,19 @@
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./hooks/useAuth";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
-import DashboardShell from "./components/DashboardShell";
-import Landing from "./pages/Landing";
-import PricingPage from "./pages/PricingPage";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import DashboardOverview from "./pages/DashboardOverview";
-import Subscription from "./pages/Subscription";
-import Instructions from "./pages/Instructions";
-import Settings from "./pages/Settings";
-import styles from "./styles/global.module.css";
+import { useAuth } from "@hooks/useAuth";
+import Navbar from "@components/Navbar";
+import Footer from "@components/Footer";
+import DashboardShell from "@components/DashboardShell";
+import styles from "@styles/global.module.css";
+
+const Landing = lazy(() => import("./pages/Landing"));
+const PricingPage = lazy(() => import("./pages/PricingPage"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const DashboardOverview = lazy(() => import("./pages/DashboardOverview"));
+const Subscription = lazy(() => import("./pages/Subscription"));
+const Instructions = lazy(() => import("./pages/Instructions"));
+const Settings = lazy(() => import("./pages/Settings"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
