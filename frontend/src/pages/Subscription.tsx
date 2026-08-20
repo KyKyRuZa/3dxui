@@ -1,36 +1,30 @@
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import { Button } from "../components/Button";
 import { useAuth } from "../hooks/useAuth";
-import {
-  getSubscription,
-  getVLESSConfig,
-  getSingBoxConfig,
-  type Subscription as Sub,
-  type VLESSConfig,
-} from "../api/subscription";
+import { activateSubscription, type Subscription as Sub } from "../api/subscription";
 import styles from "./Subscription.module.css";
 
 export default function Subscription() {
   const { user } = useAuth();
   const [sub, setSub] = useState<Sub | null>(null);
-  const [vless, setVless] = useState<VLESSConfig | null>(null);
-  const [singbox, setSingbox] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState<"key" | "link" | "vless" | "singbox" | null>(null);
+  const [copied, setCopied] = useState<"link" | "vless" | "key" | null>(null);
+  const [qrUrl, setQrUrl] = useState("");
 
   useEffect(() => {
-    getSubscription()
+    activateSubscription()
       .then(setSub)
-      .catch(() => setError("Не удалось загрузить подписку"));
-    getVLESSConfig()
-      .then(setVless)
-      .catch(() => {});
-    getSingBoxConfig()
-      .then(setSingbox)
-      .catch(() => {});
+      .catch(() => setError("Не удалось активировать подписку"));
   }, [user?.id]);
 
-  const copy = async (text: string, which: "key" | "link" | "vless" | "singbox") => {
+  useEffect(() => {
+    if (sub?.vless) {
+      QRCode.toDataURL(sub.vless, { width: 220, margin: 2 }).then(setQrUrl);
+    }
+  }, [sub?.vless]);
+
+  const copy = async (text: string, which: "link" | "vless" | "key") => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(which);
@@ -40,25 +34,61 @@ export default function Subscription() {
     }
   };
 
-  const downloadSingBox = () => {
-    if (!singbox) return;
-    const blob = new Blob([singbox], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "singbox-config.json";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="section" style={{ padding: 0 }}>
       {error && <div className={styles.error}>{error}</div>}
 
       <div className="card">
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Подписка (3x-ui)</div>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Группа</div>
+        <div className={styles.value}>{sub?.group ?? "—"}</div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Имя пользователя</div>
+        <div className={styles.value}>{sub?.username ?? "—"}</div>
+        <div className={styles.actions}>
+          <Button
+            variant="secondary"
+            disabled={!sub}
+            onClick={() => sub && copy(sub.username, "key")}
+          >
+            {copied === "key" ? "Скопировано" : "Скопировать"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>QR код (VLESS)</div>
+        {qrUrl ? (
+          <div className={styles.qrWrap}>
+            <img src={qrUrl} alt="QR код" className={styles.qrImage} />
+          </div>
+        ) : (
+          <div className={styles.keyBox}>Загрузка…</div>
+        )}
+        <div className={styles.actions}>
+          <Button disabled={!sub} onClick={() => sub && copy(sub.vless, "vless")}>
+            {copied === "vless" ? "Скопировано" : "Скопировать VLESS ссылку"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>VLESS ссылка</div>
+        {sub ? (
+          <div className={styles.keyBox}>{sub.vless}</div>
+        ) : (
+          <div className={styles.keyBox}>Загрузка…</div>
+        )}
+        <div className={styles.actions}>
+          <Button disabled={!sub} onClick={() => sub && copy(sub.vless, "vless")}>
+            {copied === "vless" ? "Скопировано" : "Скопировать VLESS ссылку"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 10 }}>Ссылка подписки</div>
         {sub ? (
           <div className={styles.keyBox}>{sub.subscription_url}</div>
         ) : (
@@ -67,48 +97,6 @@ export default function Subscription() {
         <div className={styles.actions}>
           <Button disabled={!sub} onClick={() => sub && copy(sub.subscription_url, "link")}>
             {copied === "link" ? "Скопировано" : "Скопировать ссылку"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>VLESS конфиг (Hiddify)</div>
-        {vless ? (
-          <div className={styles.keyBox}>{vless.config_url}</div>
-        ) : (
-          <div className={styles.keyBox}>Загрузка…</div>
-        )}
-        <div className={styles.actions}>
-          <Button disabled={!vless} onClick={() => vless && copy(vless.config_url, "vless")}>
-            {copied === "vless" ? "Скопировано" : "Скопировать VLESS ссылку"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Sing-box JSON</div>
-        {singbox ? (
-          <div className={styles.keyBox}>Готово к скачиванию</div>
-        ) : (
-          <div className={styles.keyBox}>Загрузка…</div>
-        )}
-        <div className={styles.actions}>
-          <Button disabled={!singbox} onClick={downloadSingBox}>
-            Скачать singbox-config.json
-          </Button>
-        </div>
-      </div>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 10 }}>Имя пользователя</div>
-        <div className={styles.keyBox}>{sub?.username ?? vless?.username ?? "—"}</div>
-        <div className={styles.actions}>
-          <Button
-            variant="secondary"
-            disabled={!sub && !vless}
-            onClick={() => copy(sub?.username || vless?.username || "", "key")}
-          >
-            {copied === "key" ? "Скопировано" : "Скопировать"}
           </Button>
         </div>
       </div>
