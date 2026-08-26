@@ -41,3 +41,10 @@ export async function getSingBoxConfig(): Promise<string> {
   });
   return data;
 }
+
+// Clear cached subscription data so the next read reflects a fresh state
+// (e.g. after a successful purchase that extended/renewed the plan).
+export function resetSubscriptionCache() {
+  cachedActivate = null;
+  cachedGet = null;
+}

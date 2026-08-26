@@ -108,8 +108,11 @@
 2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
    но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
 3. **One-shot уведомление в день истечения** («подписка закончилась — продлите»).
-4. **Веб-дашборд**: показывать `expires_at` (API уже отдаёт) в `Subscription.tsx`,
-   добавить кнопку покупки тарифа (фронт ещё не вызывает `/api/billing/*`).
+4. **Веб-дашборд**: показывать `expires_at` (API уже отдаёт) в `Subscription.tsx`
+   (фронт пока не выводит срок). Кнопка покупки тарифа — **СДЕЛАНА**:
+   `PricingCards` грузит планы с `/api/billing/plans` и по «Купить» создаёт платёж
+   через `/api/billing/create`, открывает `confirmation_url` ЮKassa в новой вкладке;
+   после оплаты webhook продлевает подписку.
 5. **Чистка DEBUG-логов**: в `bot.go`/`auth.go`/`subscription.go`/`panel/client.go` много
    `fmt.Printf("DEBUG ...")` — заменить на zap.
 6. **Админ-панель / управление планами** — опционально.
@@ -168,3 +171,4 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - Конфиг (дни подписки/уведомлений/рефералов/юкасса): `backend/internal/config/config.go`
 - Бот (aiogram): `bot/main.py`
 - Деплой: `docker-compose.yml`, `bot/Dockerfile`, `nginx/conf.d/default.conf`
+- Фронт (биллинг-кнопка): `frontend/src/api/billing.ts`, `frontend/src/components/PricingCards.tsx`
