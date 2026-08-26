@@ -250,7 +250,7 @@ func (s *Store) MarkExpiryNotified(ctx context.Context, ids []int64) error {
 		return nil
 	}
 	_, err := s.db.ExecContext(ctx, `
-UPDATE subscriptions SET last_expiry_notify_date = CURRENT_DATE WHERE id = ANY($1)`, ids)
+UPDATE subscriptions SET last_expiry_notify_date = CURRENT_DATE WHERE id = ANY($1)`, pq.Array(ids))
 	return err
 }
 
