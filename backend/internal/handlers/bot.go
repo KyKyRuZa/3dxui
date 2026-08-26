@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,17 +34,21 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	if err == store.ErrNotFound {
 		username := fmt.Sprintf("tg_%d", body.TelegramID)
 		randomPass := utils.RandString(16)
-		hash, err := auth.HashPassword(randomPass)
-		if err != nil {
+		hash, herr := auth.HashPassword(randomPass)
+		if herr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
 		user, err = h.store.CreateUser(ctx, username, "", hash)
+		if errors.Is(err, store.ErrConflict) {
+			// Username already taken (e.g. registered earlier) — reuse it.
+			user, err = h.store.GetUserByUsername(ctx, username)
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
-		if err := h.store.SetTelegramID(ctx, user.ID, body.TelegramID); err != nil {
+		if serr := h.store.SetTelegramID(ctx, user.ID, body.TelegramID); serr != nil && !errors.Is(serr, store.ErrConflict) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
@@ -100,9 +105,13 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			Status:     "active",
 		}
 		if err := h.store.CreateSubscription(ctx, sub); err != nil {
-			fmt.Printf("DEBUG botEnsureUser: CreateSubscription ERROR userID=%d err=%v\n", user.ID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-			return
+			if errors.Is(err, store.ErrConflict) {
+				sub, err = h.store.GetUserSubscription(ctx, user.ID)
+			} else {
+				fmt.Printf("DEBUG botEnsureUser: CreateSubscription ERROR userID=%d err=%v\n", user.ID, err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+				return
+			}
 		}
 		fmt.Printf("DEBUG botEnsureUser: CreateSubscription OK userID=%d subId=%s\n", user.ID, clientInfo.SubID)
 	} else if err != nil {
@@ -126,20 +135,17 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		}
 	}
 
-	resp, err := http.Get(subURL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch subscription"})
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "subscription not found"})
-		return
-	}
-	singbox, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read subscription"})
-		return
+	singbox := []byte{}
+	resp, gerr := http.Get(subURL)
+	if gerr != nil {
+		fmt.Printf("DEBUG botEnsureUser: fetch subscription ERROR url=%s err=%v\n", subURL, gerr)
+	} else {
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("DEBUG botEnsureUser: subscription not found url=%s status=%d\n", subURL, resp.StatusCode)
+		} else if body, rerr := io.ReadAll(resp.Body); rerr == nil {
+			singbox = body
+		}
 	}
 
 	internalHost := extractHost(h.cfg.PanelURL)
