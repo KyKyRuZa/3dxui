@@ -59,6 +59,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET}
       BOT_TOKEN: ${BOT_TOKEN}
+      BOT_API_SECRET: ${BOT_API_SECRET}
       APP_ENV: ${APP_ENV:-production}
       CORS_DOMAIN: ${CORS_DOMAIN}
       PANEL_URL: ${PANEL_URL}
@@ -101,6 +102,21 @@ services:
     depends_on:
       - frontend
       - backend
+
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_API_SECRET: ${BOT_API_SECRET}
+      BACKEND_URL: http://backend:8080
+      WEB_APP_URL: ${WEB_APP_URL}
+      NOTIFY_INTERVAL: ${NOTIFY_INTERVAL:-3600}
+    depends_on:
+      backend:
+        condition: service_started
 
 volumes:
   postgres_data:

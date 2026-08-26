@@ -118,6 +118,14 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	}
 	subURL := fmt.Sprintf("%s/sub/%s", strings.TrimRight(publicURL, "/"), sub.PanelSubID.String)
 
+	var vlessLink string
+	for _, link := range links {
+		if strings.HasPrefix(link, "vless://") {
+			vlessLink = link
+			break
+		}
+	}
+
 	resp, err := http.Get(subURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch subscription"})
@@ -150,6 +158,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		"provisioned":      true,
 		"subscription_url": subURL,
 		"links":            links,
+		"vless":            vlessLink,
 		"singbox":          string(singbox),
 		"username":         sub.PanelEmail,
 	})

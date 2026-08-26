@@ -30,7 +30,7 @@ func Migrate(db *sql.DB) error {
 CREATE TABLE IF NOT EXISTS users (
 	id               BIGSERIAL PRIMARY KEY,
 	username         TEXT UNIQUE NOT NULL,
-	email            TEXT UNIQUE NOT NULL,
+	email            TEXT,
 	password_hash    TEXT NOT NULL,
 	is_active        BOOLEAN NOT NULL DEFAULT TRUE,
 	telegram_id      BIGINT UNIQUE,
@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS users (
 	panel_uuid       TEXT UNIQUE,
 	created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL AND email <> '';
+
+-- Relax a pre-existing NOT NULL / UNIQUE email column for backward compatibility
+-- (NULL is allowed for bot/Telegram-provisioned users; uniqueness is enforced
+-- only for non-empty emails via the partial index above).
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
 
 CREATE TABLE IF NOT EXISTS sessions (
 	id                TEXT PRIMARY KEY,

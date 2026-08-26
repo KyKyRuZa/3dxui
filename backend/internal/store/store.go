@@ -26,7 +26,7 @@ func New(db *sql.DB) *Store { return &Store{db: db} }
 func (s *Store) CreateUser(ctx context.Context, username, email, passwordHash string) (*models.User, error) {
 	const q = `
 INSERT INTO users (username, email, password_hash)
-	VALUES ($1, $2, $3)
+	VALUES ($1, NULLIF($2, ''), $3)
 	RETURNING id, username, email, is_active, panel_username, panel_uuid, created_at`
 
 	u := &models.User{}
@@ -60,7 +60,7 @@ func (s *Store) GetUserByTelegramID(ctx context.Context, telegramID int64) (*mod
 
 func (s *Store) scanUser(ctx context.Context, where string, arg any) (*models.User, error) {
 	const base = `
-SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, created_at
+SELECT id, username, COALESCE(email, '') AS email, password_hash, is_active, telegram_id, panel_username, panel_uuid, created_at
 	FROM users `
 
 	u := &models.User{}
@@ -104,7 +104,7 @@ func (s *Store) SetPanelUUID(ctx context.Context, userID int64, panelUUID string
 }
 
 func (s *Store) UpdateEmail(ctx context.Context, userID int64, email string) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE users SET email = $1 WHERE id = $2", email, userID)
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET email = NULLIF($1, '') WHERE id = $2", email, userID)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
