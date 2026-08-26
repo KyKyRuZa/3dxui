@@ -94,6 +94,11 @@
 - ВАЖНО: webhook-URL (`https://thenomoreblocks.com/api/billing/webhook`) должен быть
   указан в профиле магазина ЮKassa и быть публично доступен по HTTPS. Для локальной
   отладки — ngrok/туннель.
+- **Проверено end-to-end (2026-08-26, тестовый магазин `1268375`):** платёж
+  `POST /api/billing/create` → webhook от IP ЮKassa (`payment.succeeded`) →
+  `provisionPlan` создаёт клиента в 3x-ui → `expires_at` = now+30 дней. Смена на
+  боевой магазин — только `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` в `.env` и
+  `docker compose up -d --build backend`; код менять не нужно.
 
 ## 4. Что в планах (не сделано)
 

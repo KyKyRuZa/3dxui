@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/ilyas/vpn-service/backend/internal/billing"
 	"github.com/ilyas/vpn-service/backend/internal/models"
+	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
 )
 
@@ -155,15 +157,13 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// Reconcile the actually captured amount against the plan price and warn
-	// (but still provision — YooKassa already captured, so we must fulfil).
-	if verified.Amount.Value != "" {
-		var gotMinor int64
-		fmt.Sscanf(verified.Amount.Value, "%d", &gotMinor)
-		if gotMinor > 0 && gotMinor != plan.PriceMinor {
-			fmt.Printf("DEBUG webhook: amount mismatch paymentID=%s plan=%s expected=%d got=%d\n",
-				payload.Object.ID, plan.ID, plan.PriceMinor, gotMinor)
-		}
+	// Reconcile the actually captured amount (major units, e.g. "299.00") against
+	// the plan price (kopecks) and warn, but still provision — YooKassa already
+	// captured, so we must fulfil.
+	gotMinor := amountMinorFromString(verified.Amount.Value)
+	if gotMinor > 0 && gotMinor != plan.PriceMinor {
+		fmt.Printf("DEBUG webhook: amount mismatch paymentID=%s plan=%s expected=%d got=%d\n",
+			payload.Object.ID, plan.ID, plan.PriceMinor, gotMinor)
 	}
 
 	if err := h.provisionPlan(ctx, userID, plan); err != nil {
@@ -175,8 +175,8 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 	// Record the authoritative status and captured amount, then credit the
 	// referrer (no-op if there is no pending referral).
 	amountMinor := plan.PriceMinor
-	if verified.Amount.Value != "" {
-		fmt.Sscanf(verified.Amount.Value, "%d", &amountMinor)
+	if gotMinor > 0 {
+		amountMinor = gotMinor
 	}
 	_ = h.store.SetPaymentResult(ctx, payload.Object.ID, "succeeded", amountMinor, verified.Amount.Currency)
 	h.CreditReferralReward(ctx, userID)
@@ -224,17 +224,27 @@ func (h *Handler) provisionPlan(ctx context.Context, userID int64, plan *models.
 	sub, err := h.store.GetUserSubscription(ctx, userID)
 	if errors.Is(err, store.ErrNotFound) {
 		expiryMs := time.Now().AddDate(0, 0, days).UnixMilli()
+		var clientInfo *panel.ClientInfo
 		if _, gerr := h.panel.GetClient(ctx, panelEmail); gerr != nil {
-			if _, aerr := h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs); aerr != nil {
+			addClientInfo, aerr := h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
+			if aerr != nil {
 				return fmt.Errorf("AddClient: %w", aerr)
+			}
+			// AddClient already generated the subId sent to the panel; prefer it
+			// over the (sometimes empty) GetClient response.
+			if addClientInfo != nil && addClientInfo.SubID != "" {
+				clientInfo = addClientInfo
+			}
+		}
+		if clientInfo == nil {
+			var gerr error
+			clientInfo, gerr = h.panel.GetClient(ctx, panelEmail)
+			if gerr != nil {
+				return fmt.Errorf("GetClient: %w", gerr)
 			}
 		}
 		if aerr := h.panel.AddToGroup(ctx, []string{panelEmail}, group); aerr != nil {
 			return fmt.Errorf("AddToGroup: %w", aerr)
-		}
-		clientInfo, gerr := h.panel.GetClient(ctx, panelEmail)
-		if gerr != nil {
-			return fmt.Errorf("GetClient: %w", gerr)
 		}
 		newSub := &models.Subscription{
 			UserID:     userID,
@@ -272,4 +282,17 @@ func (h *Handler) provisionPlan(ctx context.Context, userID int64, plan *models.
 		return fmt.Errorf("UpdateSubscriptionExpiry: %w", uerr)
 	}
 	return nil
+}
+
+// amountMinorFromString parses a YooKassa amount value (major units, e.g.
+// "299.00" RUB) into kopecks. Returns 0 if empty or unparseable.
+func amountMinorFromString(v string) int64 {
+	if v == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(f * 100)
 }
