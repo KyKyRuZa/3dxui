@@ -123,8 +123,10 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		return
 	}
 
-	// Renew an already-expired subscription (e.g. user pressed "Купить ключ" again).
-	if sub.ExpiresAt.Valid && sub.ExpiresAt.Time.Before(time.Now()) {
+	// Renew a subscription that has no expiry yet or has already expired
+	// (e.g. user pressed "Купить ключ" again). This also binds the new
+	// time-limited model to previously unlimited (grandfathered) subscriptions.
+	if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(time.Now()) {
 		if err := h.renewSubscription(ctx, sub); err != nil {
 			fmt.Printf("DEBUG botEnsureUser: renew ERROR userID=%d err=%v\n", user.ID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to renew subscription"})
