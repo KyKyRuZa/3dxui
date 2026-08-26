@@ -62,6 +62,29 @@ type Subscription struct {
 	LastExpiryNotifyDate sql.NullTime   `json:"-" db:"last_expiry_notify_date"`
 }
 
+// Plan describes a purchasable VPN subscription tier. Price is stored in the
+// smallest currency unit (kopecks for RUB) to avoid floating point rounding.
+type Plan struct {
+	ID           string `db:"id" json:"id"`
+	Name         string `db:"name" json:"name"`
+	DurationDays int    `db:"duration_days" json:"duration_days"`
+	PriceMinor   int64  `db:"price_minor" json:"price_minor"`
+	Currency     string `db:"currency" json:"currency"`
+	GroupName    string `db:"group_name" json:"group_name"`
+}
+
+// PaymentRow tracks a YooKassa payment and links it to the buying user/plan.
+type PaymentRow struct {
+	ID          string    `db:"id" json:"id"`
+	UserID      int64     `db:"user_id" json:"user_id"`
+	PlanID      string    `db:"plan_id" json:"plan_id"`
+	Status      string    `db:"status" json:"status"`
+	AmountMinor int64     `db:"amount_minor" json:"amount_minor"`
+	Currency    string    `db:"currency" json:"currency"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+}
+
 func (u User) Public() PublicProfile {
 	return PublicProfile{
 		ID:        u.ID,

@@ -26,7 +26,7 @@ type Store struct {
 func New(db *sql.DB) *Store { return &Store{db: db} }
 
 func (s *Store) CreateUser(ctx context.Context, username, email, passwordHash string) (*models.User, error) {
-const q = `
+	const q = `
 INSERT INTO users (username, email, password_hash, referral_code)
 	VALUES ($1, $2, $3, $4)
 	RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at`
@@ -62,7 +62,7 @@ func (s *Store) GetUserByTelegramID(ctx context.Context, telegramID int64) (*mod
 }
 
 func (s *Store) scanUser(ctx context.Context, where string, arg any) (*models.User, error) {
-const base = `
+	const base = `
 SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at
 	FROM users `
 
@@ -209,8 +209,8 @@ func (s *Store) UpdateSubscriptionSubID(ctx context.Context, subID int64, subIDS
 type ExpiringItem struct {
 	ID         int64     `db:"id"`
 	TelegramID int64     `db:"telegram_id"`
-	Username    string    `db:"username"`
-	ExpiresAt   time.Time `db:"expires_at"`
+	Username   string    `db:"username"`
+	ExpiresAt  time.Time `db:"expires_at"`
 }
 
 // GetExpiringSubscriptions returns subscriptions whose expiry falls within
@@ -327,4 +327,88 @@ SELECT COUNT(*), COALESCE(SUM(reward_days), 0) FROM referrals WHERE referrer_id 
 		return code, 0, 0, e
 	}
 	return code, invited, earnedDays, nil
+}
+
+// ListPlans returns all available subscription plans.
+func (s *Store) ListPlans(ctx context.Context) ([]models.Plan, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, name, duration_days, price_minor, currency, group_name
+FROM plans ORDER BY duration_days ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.Plan, 0)
+	for rows.Next() {
+		var p models.Plan
+		if err := rows.Scan(&p.ID, &p.Name, &p.DurationDays, &p.PriceMinor, &p.Currency, &p.GroupName); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// GetPlan returns a plan by its id.
+func (s *Store) GetPlan(ctx context.Context, id string) (*models.Plan, error) {
+	p := &models.Plan{}
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, name, duration_days, price_minor, currency, group_name
+FROM plans WHERE id = $1`, id).
+		Scan(&p.ID, &p.Name, &p.DurationDays, &p.PriceMinor, &p.Currency, &p.GroupName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// CreatePayment records a newly created YooKassa payment.
+func (s *Store) CreatePayment(ctx context.Context, p *models.PaymentRow) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO payments (id, user_id, plan_id, status, amount_minor, currency)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()`,
+		p.ID, p.UserID, p.PlanID, p.Status, p.AmountMinor, p.Currency)
+	return err
+}
+
+// GetPayment returns a payment by its YooKassa id.
+func (s *Store) GetPayment(ctx context.Context, id string) (*models.PaymentRow, error) {
+	p := &models.PaymentRow{}
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, user_id, plan_id, status, amount_minor, currency, created_at, updated_at
+FROM payments WHERE id = $1`, id).
+		Scan(&p.ID, &p.UserID, &p.PlanID, &p.Status, &p.AmountMinor, &p.Currency, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+// UpdatePaymentStatus flips a payment's status and bumps updated_at.
+func (s *Store) UpdatePaymentStatus(ctx context.Context, id, status string) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE payments SET status = $2, updated_at = NOW() WHERE id = $1`, id, status)
+	return err
+}
+
+// SetPaymentResult records the authoritative status and the actually captured
+// amount (as reported by the YooKassa API during webhook verification). It only
+// updates status/amount/currency and never touches user_id/plan_id, so an
+// already-created row keeps its correlation data.
+func (s *Store) SetPaymentResult(ctx context.Context, id, status string, amountMinor int64, currency string) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE payments SET
+	status = $2,
+	amount_minor = CASE WHEN $3 > 0 THEN $3 ELSE amount_minor END,
+	currency = CASE WHEN $4 <> '' THEN $4 ELSE currency END,
+	updated_at = NOW()
+WHERE id = $1`, id, status, amountMinor, currency)
+	return err
 }

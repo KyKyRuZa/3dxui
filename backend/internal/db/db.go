@@ -89,6 +89,34 @@ CREATE TABLE IF NOT EXISTS referrals (
 	completed_at TIMESTAMPTZ,
 	UNIQUE (referrer_id, referred_id)
 );
+
+CREATE TABLE IF NOT EXISTS plans (
+	id            TEXT PRIMARY KEY,
+	name          TEXT NOT NULL,
+	duration_days INTEGER NOT NULL,
+	price_minor   BIGINT NOT NULL DEFAULT 0,
+	currency      TEXT NOT NULL DEFAULT 'RUB',
+	group_name    TEXT NOT NULL DEFAULT 'Free'
+);
+
+INSERT INTO plans (id, name, duration_days, price_minor, currency, group_name) VALUES
+	('standard', 'Standard', 30, 29900, 'RUB', 'Free'),
+	('pro', 'Pro', 90, 79900, 'RUB', 'Free')
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS payments (
+	id           TEXT PRIMARY KEY,
+	user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	plan_id      TEXT NOT NULL REFERENCES plans(id),
+	status       TEXT NOT NULL DEFAULT 'pending',
+	amount_minor BIGINT NOT NULL DEFAULT 0,
+	currency     TEXT NOT NULL DEFAULT 'RUB',
+	created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
 `
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)

@@ -11,27 +11,32 @@ import (
 )
 
 type Config struct {
-	AppEnv           string
-	Port             string
-	DatabaseURL      string
-	RedisURL         string
-	JWTSecret        string
-	JWTPrivateKey    string
-	CORSDomain       string
-	BotToken         string
-	AdminAPISecret   string
-	BotAPISecret     string
-	PanelURL         string
-	PanelUsername    string
-	PanelPassword    string
-	PanelAPIToken    string
-	DefaultInboundIDs []int
-	DefaultGroup       string
-	PanelPublicURL     string
+	AppEnv                  string
+	Port                    string
+	DatabaseURL             string
+	RedisURL                string
+	JWTSecret               string
+	JWTPrivateKey           string
+	CORSDomain              string
+	BotToken                string
+	AdminAPISecret          string
+	BotAPISecret            string
+	PanelURL                string
+	PanelUsername           string
+	PanelPassword           string
+	PanelAPIToken           string
+	DefaultInboundIDs       []int
+	DefaultGroup            string
+	PanelPublicURL          string
 	DefaultSubscriptionDays int
 	ExpiryNotifyDays        int
 	ReferralRewardDays      int
 	ReferralSignupBonusDays int
+
+	YookassaShopID    string
+	YookassaSecretKey string
+	YookassaAPIURL    string
+	YookassaReturnURL string
 }
 
 func Load() (*Config, error) {
@@ -47,25 +52,29 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		AppEnv:         viper.GetString("app_env"),
-		Port:           viper.GetString("port"),
-		DatabaseURL:    viper.GetString("database_url"),
-		RedisURL:       viper.GetString("redis_url"),
-		JWTSecret:      viper.GetString("jwt_secret"),
-		CORSDomain:     viper.GetString("cors_domain"),
-		BotToken:       viper.GetString("bot_token"),
-		AdminAPISecret: viper.GetString("admin_api_secret"),
-		BotAPISecret:   viper.GetString("bot_api_secret"),
-		PanelURL:       viper.GetString("panel_url"),
-		PanelUsername:  viper.GetString("panel_username"),
-		PanelPassword:  viper.GetString("panel_password"),
-		PanelAPIToken:  viper.GetString("panel_api_token"),
-		DefaultGroup:           viper.GetString("default_group"),
-		PanelPublicURL:         viper.GetString("panel_public_url"),
-		DefaultSubscriptionDays:  viper.GetInt("default_subscription_days"),
-		ExpiryNotifyDays:         viper.GetInt("expiry_notify_days"),
-		ReferralRewardDays:       viper.GetInt("referral_reward_days"),
-		ReferralSignupBonusDays:  viper.GetInt("referral_signup_bonus_days"),
+		AppEnv:                  viper.GetString("app_env"),
+		Port:                    viper.GetString("port"),
+		DatabaseURL:             viper.GetString("database_url"),
+		RedisURL:                viper.GetString("redis_url"),
+		JWTSecret:               viper.GetString("jwt_secret"),
+		CORSDomain:              viper.GetString("cors_domain"),
+		BotToken:                viper.GetString("bot_token"),
+		AdminAPISecret:          viper.GetString("admin_api_secret"),
+		BotAPISecret:            viper.GetString("bot_api_secret"),
+		PanelURL:                viper.GetString("panel_url"),
+		PanelUsername:           viper.GetString("panel_username"),
+		PanelPassword:           viper.GetString("panel_password"),
+		PanelAPIToken:           viper.GetString("panel_api_token"),
+		DefaultGroup:            viper.GetString("default_group"),
+		PanelPublicURL:          viper.GetString("panel_public_url"),
+		DefaultSubscriptionDays: viper.GetInt("default_subscription_days"),
+		ExpiryNotifyDays:        viper.GetInt("expiry_notify_days"),
+		ReferralRewardDays:      viper.GetInt("referral_reward_days"),
+		ReferralSignupBonusDays: viper.GetInt("referral_signup_bonus_days"),
+		YookassaShopID:          viper.GetString("yookassa_shop_id"),
+		YookassaSecretKey:       viper.GetString("yookassa_secret_key"),
+		YookassaAPIURL:          viper.GetString("yookassa_api_url"),
+		YookassaReturnURL:       viper.GetString("yookassa_return_url"),
 	}
 
 	if cfg.DefaultGroup == "" {
@@ -82,6 +91,16 @@ func Load() (*Config, error) {
 	}
 	if cfg.ReferralSignupBonusDays == 0 {
 		cfg.ReferralSignupBonusDays = 2
+	}
+
+	if cfg.YookassaAPIURL == "" {
+		cfg.YookassaAPIURL = "https://api.yookassa.ru/v3"
+	}
+	if cfg.YookassaReturnURL == "" {
+		cfg.YookassaReturnURL = viper.GetString("public_origin")
+	}
+	if cfg.YookassaReturnURL == "" {
+		cfg.YookassaReturnURL = viper.GetString("web_app_url")
 	}
 
 	inboundIDsStr := viper.GetString("default_inbound_ids")

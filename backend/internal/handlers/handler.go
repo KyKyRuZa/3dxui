@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ilyas/vpn-service/backend/internal/auth"
+	"github.com/ilyas/vpn-service/backend/internal/billing"
 	"github.com/ilyas/vpn-service/backend/internal/config"
 	"github.com/ilyas/vpn-service/backend/internal/middleware"
 	"github.com/ilyas/vpn-service/backend/internal/panel"
@@ -12,14 +13,15 @@ import (
 
 // Handler holds dependencies shared by all HTTP handlers.
 type Handler struct {
-	store *store.Store
-	jwt   *auth.TokenService
-	cfg   *config.Config
-	panel *panel.Client
+	store   *store.Store
+	jwt     *auth.TokenService
+	cfg     *config.Config
+	panel   *panel.Client
+	billing *billing.Client
 }
 
-func NewHandler(s *store.Store, j *auth.TokenService, cfg *config.Config, p *panel.Client) *Handler {
-	return &Handler{store: s, jwt: j, cfg: cfg, panel: p}
+func NewHandler(s *store.Store, j *auth.TokenService, cfg *config.Config, p *panel.Client, b *billing.Client) *Handler {
+	return &Handler{store: s, jwt: j, cfg: cfg, panel: p, billing: b}
 }
 
 // RegisterRoutes wires all application routes onto the engine.
@@ -57,6 +59,13 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bot.GET("/user/:telegram_id", h.botGetUser)
 			bot.GET("/notifications/expiring", h.botExpiring)
 			bot.POST("/referral", h.botReferral)
+		}
+
+		bill := api.Group("/billing")
+		{
+			bill.GET("/plans", middleware.AuthRequired(h.jwt), h.listPlans)
+			bill.POST("/create", middleware.AuthRequired(h.jwt), h.createPayment)
+			bill.POST("/webhook", h.billingWebhook)
 		}
 	}
 }

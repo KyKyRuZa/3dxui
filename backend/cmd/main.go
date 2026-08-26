@@ -7,13 +7,14 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ilyas/vpn-service/backend/internal/auth"
+	"github.com/ilyas/vpn-service/backend/internal/billing"
 	"github.com/ilyas/vpn-service/backend/internal/config"
 	"github.com/ilyas/vpn-service/backend/internal/db"
 	"github.com/ilyas/vpn-service/backend/internal/handlers"
 	"github.com/ilyas/vpn-service/backend/internal/middleware"
 	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
-	)
+)
 
 func main() {
 	cfg, err := config.Load()
@@ -51,7 +52,8 @@ func main() {
 
 	st := store.New(pg)
 	panelClient := panel.New(cfg.PanelURL, cfg.PanelUsername, cfg.PanelPassword, cfg.PanelAPIToken)
-	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient)
+	billingClient := billing.New(cfg.YookassaShopID, cfg.YookassaSecretKey, cfg.YookassaAPIURL)
+	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient, billingClient)
 
 	if cfg.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
