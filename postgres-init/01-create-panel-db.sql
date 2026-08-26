@@ -1,0 +1,2 @@
+CREATE DATABASE xui_panel WITH OWNER vpn_user;
+GRANT ALL PRIVILEGES ON DATABASE xui_panel TO vpn_user;
