@@ -14,7 +14,21 @@ type User struct {
 	TelegramID    sql.NullInt64  `json:"-" db:"telegram_id"`
 	PanelUsername sql.NullString `json:"-" db:"panel_username"`
 	PanelUUID     sql.NullString `json:"-" db:"panel_uuid"`
+	ReferralCode  sql.NullString `json:"referral_code" db:"referral_code"`
 	CreatedAt     time.Time      `json:"created_at" db:"created_at"`
+}
+
+// Referral records that `referred_id` joined via `referrer_id`'s code.
+// Status flips from "pending" to "completed" once the referred user pays,
+// at which point the referrer is rewarded with bonus days.
+type Referral struct {
+	ID          int64        `db:"id"`
+	ReferrerID  int64        `db:"referrer_id"`
+	ReferredID  int64        `db:"referred_id"`
+	Status      string       `db:"status"`
+	RewardDays  int          `db:"reward_days"`
+	CreatedAt   time.Time    `db:"created_at"`
+	CompletedAt sql.NullTime `db:"completed_at"`
 }
 
 type Session struct {

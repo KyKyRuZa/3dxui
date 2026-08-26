@@ -10,6 +10,7 @@ import (
 	"github.com/lib/pq"
 
 	"github.com/ilyas/vpn-service/backend/internal/models"
+	"github.com/ilyas/vpn-service/backend/internal/utils"
 )
 
 // ErrConflict indicates a unique-constraint violation (e.g. duplicate username).
@@ -25,14 +26,15 @@ type Store struct {
 func New(db *sql.DB) *Store { return &Store{db: db} }
 
 func (s *Store) CreateUser(ctx context.Context, username, email, passwordHash string) (*models.User, error) {
-	const q = `
-INSERT INTO users (username, email, password_hash)
-	VALUES ($1, NULLIF($2, ''), $3)
-	RETURNING id, username, email, is_active, panel_username, panel_uuid, created_at`
+const q = `
+INSERT INTO users (username, email, password_hash, referral_code)
+	VALUES ($1, $2, $3, $4)
+	RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at`
 
+	code := s.uniqueReferralCode(ctx)
 	u := &models.User{}
-	err := s.db.QueryRowContext(ctx, q, username, email, passwordHash).
-		Scan(&u.ID, &u.Username, &u.Email, &u.IsActive, &u.PanelUsername, &u.PanelUUID, &u.CreatedAt)
+	err := s.db.QueryRowContext(ctx, q, username, email, passwordHash, code).
+		Scan(&u.ID, &u.Username, &u.Email, &u.IsActive, &u.PanelUsername, &u.PanelUUID, &u.ReferralCode, &u.CreatedAt)
 	if err != nil {
 		var pqErr *pq.Error
 		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
@@ -60,13 +62,13 @@ func (s *Store) GetUserByTelegramID(ctx context.Context, telegramID int64) (*mod
 }
 
 func (s *Store) scanUser(ctx context.Context, where string, arg any) (*models.User, error) {
-	const base = `
-SELECT id, username, COALESCE(email, '') AS email, password_hash, is_active, telegram_id, panel_username, panel_uuid, created_at
+const base = `
+SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at
 	FROM users `
 
 	u := &models.User{}
 	err := s.db.QueryRowContext(ctx, base+where, arg).Scan(
-		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.IsActive, &u.TelegramID, &u.PanelUsername, &u.PanelUUID, &u.CreatedAt,
+		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.IsActive, &u.TelegramID, &u.PanelUsername, &u.PanelUUID, &u.ReferralCode, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -256,4 +258,73 @@ UPDATE subscriptions SET last_expiry_notify_date = CURRENT_DATE WHERE id = ANY($
 func (s *Store) UpdateSubscriptionExpiry(ctx context.Context, subID int64, expiresAt time.Time) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET expires_at = $1 WHERE id = $2`, expiresAt, subID)
 	return err
+}
+
+// uniqueReferralCode returns a referral code that is not yet used by any user.
+func (s *Store) uniqueReferralCode(ctx context.Context) string {
+	for i := 0; i < 10; i++ {
+		c := utils.RandString(8)
+		if _, err := s.GetUserByReferralCode(ctx, c); errors.Is(err, ErrNotFound) {
+			return c
+		}
+	}
+	return utils.RandString(8) + "x"
+}
+
+func (s *Store) GetUserByReferralCode(ctx context.Context, code string) (*models.User, error) {
+	return s.scanUser(ctx, "WHERE referral_code = $1", code)
+}
+
+// CreateReferral records that `referredID` joined via `referrerID`'s code.
+// Self-referrals and duplicates are ignored. The reward is credited later,
+// when the referred user makes a paid purchase (see CompleteReferral).
+func (s *Store) CreateReferral(ctx context.Context, referrerID, referredID int64, rewardDays int) error {
+	if referrerID == referredID {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO referrals (referrer_id, referred_id, status, reward_days)
+	VALUES ($1, $2, 'pending', $3)
+	ON CONFLICT (referrer_id, referred_id) DO NOTHING`, referrerID, referredID, rewardDays)
+	return err
+}
+
+// GetPendingReferral returns the open referral where the given user was referred.
+func (s *Store) GetPendingReferral(ctx context.Context, referredID int64) (*models.Referral, error) {
+	var r models.Referral
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, referrer_id, referred_id, status, reward_days, created_at, completed_at
+FROM referrals WHERE referred_id = $1 AND status = 'pending'`, referredID).
+		Scan(&r.ID, &r.ReferrerID, &r.ReferredID, &r.Status, &r.RewardDays, &r.CreatedAt, &r.CompletedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// CompleteReferral marks a pending referral as rewarded.
+func (s *Store) CompleteReferral(ctx context.Context, referrerID, referredID int64, rewardDays int) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE referrals SET status = 'completed', reward_days = $3, completed_at = NOW()
+WHERE referrer_id = $1 AND referred_id = $2 AND status = 'pending'`, referrerID, referredID, rewardDays)
+	return err
+}
+
+// GetReferralStats returns the user's referral code, number of completed invites,
+// and total bonus days earned.
+func (s *Store) GetReferralStats(ctx context.Context, userID int64) (code string, invited int, earnedDays int, err error) {
+	var nullCode sql.NullString
+	if e := s.db.QueryRowContext(ctx, `SELECT referral_code FROM users WHERE id = $1`, userID).Scan(&nullCode); e != nil {
+		return "", 0, 0, e
+	}
+	code = nullCode.String
+	if e := s.db.QueryRowContext(ctx, `
+SELECT COUNT(*), COALESCE(SUM(reward_days), 0) FROM referrals WHERE referrer_id = $1 AND status = 'completed'`, userID).
+		Scan(&invited, &earnedDays); e != nil {
+		return code, 0, 0, e
+	}
+	return code, invited, earnedDays, nil
 }

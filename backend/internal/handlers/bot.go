@@ -22,8 +22,9 @@ import (
 
 func (h *Handler) botEnsureUser(c *gin.Context) {
 	var body struct {
-		TelegramID int64  `json:"telegram_id"`
-		FirstName  string `json:"first_name"`
+		TelegramID  int64  `json:"telegram_id"`
+		FirstName   string `json:"first_name"`
+		ReferralCode string `json:"referral_code"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.TelegramID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -118,6 +119,17 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			}
 		}
 		fmt.Printf("DEBUG botEnsureUser: CreateSubscription OK userID=%d subId=%s\n", user.ID, clientInfo.SubID)
+
+		// Referral: record a pending referral for the referrer (rewarded on the
+		// referred user's first paid purchase) and grant the referred user a
+		// signup bonus immediately.
+		if body.ReferralCode != "" {
+			if referrer, rerr := h.store.GetUserByReferralCode(ctx, body.ReferralCode); rerr == nil && referrer.ID != user.ID {
+				if cerr := h.store.CreateReferral(ctx, referrer.ID, user.ID, h.cfg.ReferralRewardDays); cerr == nil {
+					h.applyReferralSignupBonus(ctx, sub)
+				}
+			}
+		}
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -188,6 +200,33 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 
 // renewSubscription extends a panel client's expiry by the configured default
 // duration and persists the new expiry in our DB.
+func (h *Handler) applyReferralSignupBonus(ctx context.Context, sub *models.Subscription) {
+	if h.cfg.ReferralSignupBonusDays <= 0 {
+		return
+	}
+	days := h.cfg.ReferralSignupBonusDays
+	newExpiry := time.Now().AddDate(0, 0, days)
+	if sub.ExpiresAt.Valid {
+		newExpiry = sub.ExpiresAt.Time.AddDate(0, 0, days)
+	}
+	subID := sub.PanelSubID.String
+	if subID == "" {
+		if ci, gerr := h.panel.GetClient(ctx, sub.PanelEmail); gerr == nil && ci.SubID != "" {
+			subID = ci.SubID
+			_ = h.store.UpdateSubscriptionSubID(ctx, sub.ID, subID)
+		}
+	}
+	if err := h.panel.UpdateClient(ctx, sub.PanelEmail, subID, newExpiry.UnixMilli(), h.cfg.DefaultInboundIDs); err != nil {
+		fmt.Printf("DEBUG applyReferralSignupBonus: UpdateClient ERROR userID=%d err=%v\n", sub.UserID, err)
+		return
+	}
+	if err := h.store.UpdateSubscriptionExpiry(ctx, sub.ID, newExpiry); err != nil {
+		fmt.Printf("DEBUG applyReferralSignupBonus: UpdateSubscriptionExpiry ERROR userID=%d err=%v\n", sub.UserID, err)
+		return
+	}
+	sub.ExpiresAt = sql.NullTime{Time: newExpiry, Valid: true}
+}
+
 func (h *Handler) renewSubscription(ctx context.Context, sub *models.Subscription) error {
 	subID := sub.PanelSubID.String
 	if subID == "" {
@@ -206,6 +245,75 @@ func (h *Handler) renewSubscription(ctx context.Context, sub *models.Subscriptio
 	}
 	sub.ExpiresAt = sql.NullTime{Time: expiresAt, Valid: true}
 	return nil
+}
+
+// CreditReferralReward rewards the referrer of the given (just paid) user with
+// bonus days, extending the referrer's subscription. Called from the billing
+// webhook once a paid purchase succeeds. No-op if there is no pending referral
+// or the referrer has no active subscription.
+func (h *Handler) CreditReferralReward(ctx context.Context, referredUserID int64) {
+	ref, err := h.store.GetPendingReferral(ctx, referredUserID)
+	if err != nil || ref == nil {
+		return
+	}
+	if ref.ReferrerID == referredUserID {
+		return
+	}
+	referrerSub, err := h.store.GetUserSubscription(ctx, ref.ReferrerID)
+	if err != nil {
+		fmt.Printf("DEBUG CreditReferralReward: referrer has no subscription referrer=%d err=%v\n", ref.ReferrerID, err)
+		return
+	}
+	days := h.cfg.ReferralRewardDays
+	newExpiry := time.Now().AddDate(0, 0, days)
+	if referrerSub.ExpiresAt.Valid {
+		newExpiry = referrerSub.ExpiresAt.Time.AddDate(0, 0, days)
+	}
+	subID := referrerSub.PanelSubID.String
+	if subID == "" {
+		if ci, gerr := h.panel.GetClient(ctx, referrerSub.PanelEmail); gerr == nil && ci.SubID != "" {
+			subID = ci.SubID
+			_ = h.store.UpdateSubscriptionSubID(ctx, referrerSub.ID, subID)
+		}
+	}
+	if err := h.panel.UpdateClient(ctx, referrerSub.PanelEmail, subID, newExpiry.UnixMilli(), h.cfg.DefaultInboundIDs); err != nil {
+		fmt.Printf("DEBUG CreditReferralReward: UpdateClient ERROR referrer=%d err=%v\n", ref.ReferrerID, err)
+		return
+	}
+	if err := h.store.UpdateSubscriptionExpiry(ctx, referrerSub.ID, newExpiry); err != nil {
+		fmt.Printf("DEBUG CreditReferralReward: UpdateSubscriptionExpiry ERROR referrer=%d err=%v\n", ref.ReferrerID, err)
+		return
+	}
+	if err := h.store.CompleteReferral(ctx, ref.ReferrerID, ref.ReferredID, days); err != nil {
+		fmt.Printf("DEBUG CreditReferralReward: CompleteReferral ERROR err=%v\n", err)
+		return
+	}
+	fmt.Printf("DEBUG CreditReferralReward: rewarded referrer=%d days=%d\n", ref.ReferrerID, days)
+}
+
+func (h *Handler) botReferral(c *gin.Context) {
+	var body struct {
+		TelegramID int64 `json:"telegram_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.TelegramID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	user, err := h.store.GetUserByTelegramID(c.Request.Context(), body.TelegramID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	code, invited, earned, err := h.store.GetReferralStats(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"referral_code": code,
+		"invited":       invited,
+		"earned_days":   earned,
+	})
 }
 
 func expiresAtMillis(nt sql.NullTime) int64 {

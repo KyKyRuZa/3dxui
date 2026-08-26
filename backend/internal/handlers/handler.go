@@ -56,6 +56,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bot.POST("/user", h.botEnsureUser)
 			bot.GET("/user/:telegram_id", h.botGetUser)
 			bot.GET("/notifications/expiring", h.botExpiring)
+			bot.POST("/referral", h.botReferral)
 		}
 	}
 }

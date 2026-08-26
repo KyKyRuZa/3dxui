@@ -30,6 +30,8 @@ type Config struct {
 	PanelPublicURL     string
 	DefaultSubscriptionDays int
 	ExpiryNotifyDays        int
+	ReferralRewardDays      int
+	ReferralSignupBonusDays int
 }
 
 func Load() (*Config, error) {
@@ -60,8 +62,10 @@ func Load() (*Config, error) {
 		PanelAPIToken:  viper.GetString("panel_api_token"),
 		DefaultGroup:           viper.GetString("default_group"),
 		PanelPublicURL:         viper.GetString("panel_public_url"),
-		DefaultSubscriptionDays: viper.GetInt("default_subscription_days"),
-		ExpiryNotifyDays:        viper.GetInt("expiry_notify_days"),
+		DefaultSubscriptionDays:  viper.GetInt("default_subscription_days"),
+		ExpiryNotifyDays:         viper.GetInt("expiry_notify_days"),
+		ReferralRewardDays:       viper.GetInt("referral_reward_days"),
+		ReferralSignupBonusDays:  viper.GetInt("referral_signup_bonus_days"),
 	}
 
 	if cfg.DefaultGroup == "" {
@@ -72,6 +76,12 @@ func Load() (*Config, error) {
 	}
 	if cfg.ExpiryNotifyDays == 0 {
 		cfg.ExpiryNotifyDays = cfg.DefaultSubscriptionDays
+	}
+	if cfg.ReferralRewardDays == 0 {
+		cfg.ReferralRewardDays = 7
+	}
+	if cfg.ReferralSignupBonusDays == 0 {
+		cfg.ReferralSignupBonusDays = 2
 	}
 
 	inboundIDsStr := viper.GetString("default_inbound_ids")

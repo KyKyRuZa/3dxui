@@ -73,6 +73,22 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_panel_email ON subscriptions(panel_email);
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_expiry_notify_date DATE;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
+
+-- Backfill a referral code for users created before the column existed.
+UPDATE users SET referral_code = 'ref' || id WHERE referral_code IS NULL;
+
+CREATE TABLE IF NOT EXISTS referrals (
+	id          BIGSERIAL PRIMARY KEY,
+	referrer_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	referred_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	status      TEXT NOT NULL DEFAULT 'pending',
+	reward_days INTEGER NOT NULL DEFAULT 0,
+	created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	completed_at TIMESTAMPTZ,
+	UNIQUE (referrer_id, referred_id)
+);
 `
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)

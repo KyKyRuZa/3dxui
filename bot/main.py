@@ -33,19 +33,37 @@ NOTIFY_INTERVAL = int(os.getenv("NOTIFY_INTERVAL", "3600"))
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 http_client: httpx.AsyncClient | None = None
+# Pending referrer codes captured from /start REFCODE, applied on first key purchase.
+pending_refs: dict[int, str] = {}
 
 
 def api_headers() -> dict:
     return {"X-Bot-Secret": BOT_API_SECRET, "Content-Type": "application/json"}
 
 
-async def backend_ensure_user(telegram_id: int, first_name: str | None = None) -> dict:
+async def backend_ensure_user(telegram_id: int, first_name: str | None = None, referral_code: str | None = None) -> dict:
+    payload = {"telegram_id": telegram_id, "first_name": first_name or ""}
+    if referral_code:
+        payload["referral_code"] = referral_code
     resp = await http_client.post(
         f"{BACKEND_URL}/api/bot/user",
         headers=api_headers(),
-        json={"telegram_id": telegram_id, "first_name": first_name or ""},
+        json=payload,
         timeout=30,
     )
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def backend_referral(telegram_id: int) -> dict | None:
+    resp = await http_client.post(
+        f"{BACKEND_URL}/api/bot/referral",
+        headers=api_headers(),
+        json={"telegram_id": telegram_id},
+        timeout=30,
+    )
+    if resp.status_code == 404:
+        return None
     resp.raise_for_status()
     return resp.json()
 
@@ -78,6 +96,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🔑 Купить ключ VPN", callback_data="buy")],
             [InlineKeyboardButton(text="📊 Моя подписка", callback_data="status")],
+            [InlineKeyboardButton(text="🤝 Реферальная программа", callback_data="referral")],
             [InlineKeyboardButton(text="📖 Инструкция", callback_data="instructions")],
             [InlineKeyboardButton(text="🪝 Открыть WebApp", web_app=types.WebAppInfo(url=WEB_APP_URL))],
         ]
@@ -130,7 +149,8 @@ def format_config_message(data: dict) -> str:
 async def deliver_key(message: types.Message, telegram_id: int, first_name: str | None):
     wait = await message.answer("⏳ Создаю ваш ключ, секунду…")
     try:
-        data = await backend_ensure_user(telegram_id, first_name)
+        ref = pending_refs.pop(telegram_id, None)
+        data = await backend_ensure_user(telegram_id, first_name, ref)
     except httpx.HTTPStatusError as e:
         logger.error("ensure user failed: %s", e.response.text)
         await wait.delete()
@@ -167,10 +187,32 @@ async def deliver_key(message: types.Message, telegram_id: int, first_name: str 
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message) -> None:
+    parts = message.text.split(maxsplit=1)
+    if len(parts) > 1 and parts[1].strip():
+        pending_refs[message.from_user.id] = parts[1].strip()
     await message.answer(
         "<b>Добро пожаловать в NoMoreBlocks VPN! 🛡️</b>\n\n"
         "Я выдаю и доставляю ваши VPN-ключи прямо сюда в Telegram.\n"
         "Нажмите <b>🔑 Купить ключ VPN</b>, чтобы получить конфиг для обхода блокировок.",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+@dp.message(Command("referral"))
+async def cmd_referral(message: types.Message) -> None:
+    data = await backend_referral(message.from_user.id)
+    if not data or not data.get("referral_code"):
+        await message.answer("Реферальная программа пока недоступна.", reply_markup=main_menu_keyboard())
+        return
+    me = await bot.get_me()
+    link = f"https://t.me/{me.username}?start={data['referral_code']}"
+    await message.answer(
+        f"🤝 <b>Реферальная программа</b>\n\n"
+        f"Ваша ссылка: <code>{link}</code>\n"
+        f"Приглашено: <b>{data['invited']}</b>\n"
+        f"Начислено бонусных дней: <b>{data['earned_days']}</b>\n\n"
+        f"За каждого друга, купившего платный тариф, вы получите +7 дней к подписке. "
+        f"Друг, перешедший по ссылке, получает бонус к пробному периоду.",
         reply_markup=main_menu_keyboard(),
     )
 
@@ -215,6 +257,23 @@ async def callbacks(callback: types.CallbackQuery):
     if callback.data == "buy":
         if callback.message is not None:
             await deliver_key(callback.message, callback.from_user.id, callback.from_user.first_name)
+        return
+    if callback.data == "referral":
+        data = await backend_referral(callback.from_user.id)
+        if not data or not data.get("referral_code"):
+            text = "Реферальная программа пока недоступна."
+        else:
+            me = await bot.get_me()
+            link = f"https://t.me/{me.username}?start={data['referral_code']}"
+            text = (
+                f"🤝 <b>Реферальная программа</b>\n\n"
+                f"Ваша ссылка: <code>{link}</code>\n"
+                f"Приглашено: <b>{data['invited']}</b>\n"
+                f"Начислено бонусных дней: <b>{data['earned_days']}</b>\n\n"
+                f"За каждого друга, купившего платный тариф, вы получите +7 дней к подписке."
+            )
+        if callback.message is not None:
+            await callback.message.answer(text, reply_markup=main_menu_keyboard())
         return
     if callback.data == "status":
         data = await backend_get_user(callback.from_user.id)
