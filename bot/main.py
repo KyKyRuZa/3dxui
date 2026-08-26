@@ -98,8 +98,14 @@ def format_config_message(data: dict) -> str:
     lines = ["<b>🔐 Ваш VPN-ключ готов!</b>\n"]
     if data.get("subscription_url"):
         lines.append(f"🔗 <b>Подписка (для Hiddify/всех клиентов):</b>\n<code>{data['subscription_url']}</code>\n")
-    if data.get("vless"):
-        lines.append(f"🌐 <b>VLESS Reality ссылка:</b>\n<code>{data['vless']}</code>\n")
+    vless = data.get("vless")
+    if not vless:
+        for link in data.get("links", []):
+            if link.startswith("vless://"):
+                vless = link
+                break
+    if vless:
+        lines.append(f"🌐 <b>VLESS Reality ссылка:</b>\n<code>{vless}</code>\n")
     lines.append("📦 Sing-box конфиг пришлю отдельным файлом ниже.")
     return "\n".join(lines)
 
