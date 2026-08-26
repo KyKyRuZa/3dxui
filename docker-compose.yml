@@ -74,6 +74,8 @@ services:
       PANEL_API_TOKEN: ${PANEL_API_TOKEN}
       DEFAULT_GROUP: ${DEFAULT_GROUP:-Free}
       DEFAULT_INBOUND_IDS: ${DEFAULT_INBOUND_IDS:-1}
+      DEFAULT_SUBSCRIPTION_DAYS: ${DEFAULT_SUBSCRIPTION_DAYS:-2}
+      EXPIRY_NOTIFY_DAYS: ${EXPIRY_NOTIFY_DAYS:-2}
     depends_on:
       postgres:
         condition: service_healthy

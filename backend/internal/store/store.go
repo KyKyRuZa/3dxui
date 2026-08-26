@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/lib/pq"
 
@@ -154,19 +155,19 @@ func (s *Store) DeleteUserSessions(ctx context.Context, userID int64) error {
 
 func (s *Store) CreateSubscription(ctx context.Context, sub *models.Subscription) error {
 	const q = `
-INSERT INTO subscriptions (user_id, status, panel_email, panel_sub_id, group_name)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO subscriptions (user_id, status, panel_email, panel_sub_id, group_name, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, created_at`
-	return s.db.QueryRowContext(ctx, q, sub.UserID, sub.Status, sub.PanelEmail, sub.PanelSubID, sub.GroupName).
+	return s.db.QueryRowContext(ctx, q, sub.UserID, sub.Status, sub.PanelEmail, sub.PanelSubID, sub.GroupName, sub.ExpiresAt).
 		Scan(&sub.ID, &sub.CreatedAt)
 }
 
 func (s *Store) GetUserSubscription(ctx context.Context, userID int64) (*models.Subscription, error) {
 	sub := &models.Subscription{}
 	err := s.db.QueryRowContext(ctx, `
-SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at
+SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at, expires_at
 FROM subscriptions WHERE user_id = $1`, userID).
-		Scan(&sub.ID, &sub.UserID, &sub.Status, &sub.PanelEmail, &sub.PanelSubID, &sub.GroupName, &sub.CreatedAt)
+		Scan(&sub.ID, &sub.UserID, &sub.Status, &sub.PanelEmail, &sub.PanelSubID, &sub.GroupName, &sub.CreatedAt, &sub.ExpiresAt)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
@@ -198,5 +199,61 @@ func (s *Store) UpdateSubscriptionGroup(ctx context.Context, subID int64, group 
 
 func (s *Store) UpdateSubscriptionSubID(ctx context.Context, subID int64, subIDStr string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET panel_sub_id = $1 WHERE id = $2`, subIDStr, subID)
+	return err
+}
+
+// ExpiringItem is a subscription that is about to expire, joined with the
+// owning user's Telegram id and username (used for bot notifications).
+type ExpiringItem struct {
+	ID         int64     `db:"id"`
+	TelegramID int64     `db:"telegram_id"`
+	Username    string    `db:"username"`
+	ExpiresAt   time.Time `db:"expires_at"`
+}
+
+// GetExpiringSubscriptions returns subscriptions whose expiry falls within
+// (now, before], that belong to users with a Telegram id, and that have not
+// already been notified today. Results are ordered by soonest expiry first.
+func (s *Store) GetExpiringSubscriptions(ctx context.Context, before time.Time) ([]ExpiringItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT s.id, u.telegram_id, u.username, s.expires_at
+FROM subscriptions s
+JOIN users u ON u.id = s.user_id
+WHERE s.expires_at IS NOT NULL
+  AND s.expires_at <= $1
+  AND s.expires_at > NOW()
+  AND u.telegram_id IS NOT NULL
+  AND (s.last_expiry_notify_date IS NULL OR s.last_expiry_notify_date < CURRENT_DATE)
+ORDER BY s.expires_at ASC`, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]ExpiringItem, 0)
+	for rows.Next() {
+		var it ExpiringItem
+		if err := rows.Scan(&it.ID, &it.TelegramID, &it.Username, &it.ExpiresAt); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// MarkExpiryNotified records that the given subscriptions were notified today,
+// so the daily notification loop does not re-send on the same calendar day.
+func (s *Store) MarkExpiryNotified(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+UPDATE subscriptions SET last_expiry_notify_date = CURRENT_DATE WHERE id = ANY($1)`, ids)
+	return err
+}
+
+// UpdateSubscriptionExpiry extends (or sets) a subscription's expiry timestamp.
+func (s *Store) UpdateSubscriptionExpiry(ctx context.Context, subID int64, expiresAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET expires_at = $1 WHERE id = $2`, expiresAt, subID)
 	return err
 }

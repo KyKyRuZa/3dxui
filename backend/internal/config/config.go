@@ -28,6 +28,8 @@ type Config struct {
 	DefaultInboundIDs []int
 	DefaultGroup       string
 	PanelPublicURL     string
+	DefaultSubscriptionDays int
+	ExpiryNotifyDays        int
 }
 
 func Load() (*Config, error) {
@@ -56,12 +58,20 @@ func Load() (*Config, error) {
 		PanelUsername:  viper.GetString("panel_username"),
 		PanelPassword:  viper.GetString("panel_password"),
 		PanelAPIToken:  viper.GetString("panel_api_token"),
-		DefaultGroup:      viper.GetString("default_group"),
-		PanelPublicURL:    viper.GetString("panel_public_url"),
+		DefaultGroup:           viper.GetString("default_group"),
+		PanelPublicURL:         viper.GetString("panel_public_url"),
+		DefaultSubscriptionDays: viper.GetInt("default_subscription_days"),
+		ExpiryNotifyDays:        viper.GetInt("expiry_notify_days"),
 	}
 
 	if cfg.DefaultGroup == "" {
 		cfg.DefaultGroup = "Free"
+	}
+	if cfg.DefaultSubscriptionDays == 0 {
+		cfg.DefaultSubscriptionDays = 2
+	}
+	if cfg.ExpiryNotifyDays == 0 {
+		cfg.ExpiryNotifyDays = cfg.DefaultSubscriptionDays
 	}
 
 	inboundIDsStr := viper.GetString("default_inbound_ids")

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -60,11 +62,12 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	sub, err := h.store.GetUserSubscription(ctx, user.ID)
 	if err == store.ErrNotFound {
 		panelEmail := user.Username
+		expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
 		var addClientInfo *panel.ClientInfo
 		if _, getErr := h.panel.GetClient(ctx, panelEmail); getErr != nil {
 			fmt.Printf("DEBUG botEnsureUser: creating client email=%s err=%v\n", panelEmail, getErr)
-			addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs)
+			addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
 			if err != nil {
 				fmt.Printf("DEBUG botEnsureUser: AddClient ERROR email=%s err=%v\n", panelEmail, err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client"})
@@ -103,6 +106,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			PanelSubID: sql.NullString{String: clientInfo.SubID, Valid: clientInfo.SubID != ""},
 			GroupName:  h.cfg.DefaultGroup,
 			Status:     "active",
+			ExpiresAt:  sql.NullTime{Time: time.UnixMilli(expiryMs), Valid: true},
 		}
 		if err := h.store.CreateSubscription(ctx, sub); err != nil {
 			if errors.Is(err, store.ErrConflict) {
@@ -117,6 +121,15 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
+	}
+
+	// Renew an already-expired subscription (e.g. user pressed "Купить ключ" again).
+	if sub.ExpiresAt.Valid && sub.ExpiresAt.Time.Before(time.Now()) {
+		if err := h.renewSubscription(ctx, sub); err != nil {
+			fmt.Printf("DEBUG botEnsureUser: renew ERROR userID=%d err=%v\n", user.ID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to renew subscription"})
+			return
+		}
 	}
 
 	links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
@@ -167,7 +180,37 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		"vless":            vlessLink,
 		"singbox":          string(singbox),
 		"username":         sub.PanelEmail,
+		"expires_at":       expiresAtMillis(sub.ExpiresAt),
 	})
+}
+
+// renewSubscription extends a panel client's expiry by the configured default
+// duration and persists the new expiry in our DB.
+func (h *Handler) renewSubscription(ctx context.Context, sub *models.Subscription) error {
+	subID := sub.PanelSubID.String
+	if subID == "" {
+		if ci, gerr := h.panel.GetClient(ctx, sub.PanelEmail); gerr == nil && ci.SubID != "" {
+			subID = ci.SubID
+			_ = h.store.UpdateSubscriptionSubID(ctx, sub.ID, subID)
+		}
+	}
+	expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
+	if err := h.panel.UpdateClient(ctx, sub.PanelEmail, subID, expiryMs, h.cfg.DefaultInboundIDs); err != nil {
+		return err
+	}
+	expiresAt := time.UnixMilli(expiryMs)
+	if err := h.store.UpdateSubscriptionExpiry(ctx, sub.ID, expiresAt); err != nil {
+		return err
+	}
+	sub.ExpiresAt = sql.NullTime{Time: expiresAt, Valid: true}
+	return nil
+}
+
+func expiresAtMillis(nt sql.NullTime) int64 {
+	if nt.Valid {
+		return nt.Time.UnixMilli()
+	}
+	return 0
 }
 
 func (h *Handler) botGetUser(c *gin.Context) {
@@ -211,10 +254,37 @@ func (h *Handler) botGetUser(c *gin.Context) {
 		"links":            links,
 		"username":         sub.PanelEmail,
 		"group":            sub.GroupName,
+		"expires_at":       expiresAtMillis(sub.ExpiresAt),
 		"user":             user.Public(),
 	})
 }
 
 func (h *Handler) botExpiring(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"users": []interface{}{}})
+	ctx := c.Request.Context()
+	before := time.Now().AddDate(0, 0, h.cfg.ExpiryNotifyDays)
+	items, err := h.store.GetExpiringSubscriptions(ctx, before)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	ids := make([]int64, 0, len(items))
+	users := make([]gin.H, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+		users = append(users, gin.H{
+			"telegram_id": it.TelegramID,
+			"username":    it.Username,
+			"expires_at":  it.ExpiresAt.UnixMilli(),
+		})
+	}
+
+	// Mark as notified for today so the loop does not re-send on the same day.
+	if len(ids) > 0 {
+		if err := h.store.MarkExpiryNotified(ctx, ids); err != nil {
+			fmt.Printf("DEBUG botExpiring: mark notified ERROR err=%v\n", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": users})
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -88,6 +89,7 @@ func (h *Handler) getSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"subscription_url": subURL,
 		"username":         sub.PanelEmail,
+		"expires_at":       expiresAtMillis(sub.ExpiresAt),
 	})
 }
 
@@ -192,6 +194,12 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 				h.store.UpdateSubscriptionSubID(ctx, sub.ID, clientInfo.SubID)
 			}
 		}
+		// Renew an expired subscription when the user re-activates.
+		if sub.ExpiresAt.Valid && sub.ExpiresAt.Time.Before(time.Now()) {
+			if rerr := h.renewSubscription(ctx, sub); rerr != nil {
+				fmt.Printf("DEBUG activate: renew ERROR userID=%d err=%v\n", userID, rerr)
+			}
+		}
 		links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
 		links = h.rewritePanelLinks(links)
 		publicURL := h.cfg.PanelPublicURL
@@ -214,6 +222,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 			"username":         sub.PanelEmail,
 			"group":            sub.GroupName,
 			"vless":            vlessLink,
+			"expires_at":       expiresAtMillis(sub.ExpiresAt),
 		})
 		return
 	}
@@ -230,10 +239,11 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 
 	var addClientInfo *panel.ClientInfo
+	expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
 	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
 		fmt.Printf("DEBUG activate: creating client in panel email=%s err=%v\n", panelEmail, err)
-		addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, 0, h.cfg.DefaultInboundIDs)
+		addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
 		if err != nil {
 			fmt.Printf("DEBUG activate: AddClient ERROR email=%s err=%v\n", panelEmail, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client in panel"})
@@ -273,6 +283,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		PanelSubID: sql.NullString{String: clientInfo.SubID, Valid: clientInfo.SubID != ""},
 		GroupName:  h.cfg.DefaultGroup,
 		Status:     "active",
+		ExpiresAt:  sql.NullTime{Time: time.UnixMilli(expiryMs), Valid: true},
 	}
 	if err := h.store.CreateSubscription(ctx, sub); err != nil {
 		fmt.Printf("DEBUG activate: CreateSubscription ERROR userID=%d err=%v\n", userID, err)

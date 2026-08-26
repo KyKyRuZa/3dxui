@@ -311,6 +311,42 @@ func (c *Client) RemoveFromGroup(ctx context.Context, emails []string) error {
 	return nil
 }
 
+func (c *Client) UpdateClient(ctx context.Context, email, subID string, expiryTime int64, inboundIDs []int) error {
+	if err := c.ensureLoggedIn(ctx); err != nil {
+		return err
+	}
+	u := fmt.Sprintf("%s/panel/api/clients/update/%s", c.baseURL, url.PathEscape(email))
+	payload := map[string]interface{}{
+		"email":      email,
+		"subId":      subID,
+		"expiryTime": expiryTime,
+		"enable":     true,
+		"totalGB":    0,
+		"tgId":       0,
+		"inboundIds": inboundIDs,
+	}
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(jsonBody))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("panel UpdateClient: %s", string(respBody))
+	}
+	return nil
+}
+
 func (c *Client) setAuthHeader(req *http.Request) {
 	if c.apiToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.apiToken)

@@ -37,13 +37,15 @@ type PublicProfile struct {
 }
 
 type Subscription struct {
-	ID         int64          `json:"id" db:"id"`
-	UserID     int64          `json:"user_id" db:"user_id"`
-	Status     string         `json:"status" db:"status"`
-	PanelEmail string         `json:"panel_email" db:"panel_email"`
-	PanelSubID sql.NullString `json:"panel_sub_id" db:"panel_sub_id"`
-	GroupName  string         `json:"group_name" db:"group_name"`
-	CreatedAt  time.Time      `json:"created_at" db:"created_at"`
+	ID                   int64          `json:"id" db:"id"`
+	UserID               int64          `json:"user_id" db:"user_id"`
+	Status               string         `json:"status" db:"status"`
+	PanelEmail           string         `json:"panel_email" db:"panel_email"`
+	PanelSubID           sql.NullString `json:"panel_sub_id" db:"panel_sub_id"`
+	GroupName            string         `json:"group_name" db:"group_name"`
+	CreatedAt            time.Time      `json:"created_at" db:"created_at"`
+	ExpiresAt            sql.NullTime   `json:"expires_at" db:"expires_at"`
+	LastExpiryNotifyDate sql.NullTime   `json:"-" db:"last_expiry_notify_date"`
 }
 
 func (u User) Public() PublicProfile {

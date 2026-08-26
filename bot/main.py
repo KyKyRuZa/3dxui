@@ -94,6 +94,20 @@ def reply_open_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def format_expiry(data: dict) -> str | None:
+    exp = data.get("expires_at")
+    if not exp:
+        return None
+    now = datetime.now(timezone.utc)
+    dt = datetime.fromtimestamp(exp / 1000, tz=timezone.utc)
+    days = (dt - now).total_seconds() / 86400
+    if days > 1:
+        return f"⏳ Подписка активна до <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b> (осталось ~{days:.0f} дн.)"
+    if days > 0:
+        return f"⏳ Подписка активна до <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b> (осталось менее суток)"
+    return f"⚠️ Подписка истекла <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b>. Продлите через 🔑 Купить ключ VPN."
+
+
 def format_config_message(data: dict) -> str:
     lines = ["<b>🔐 Ваш VPN-ключ готов!</b>\n"]
     if data.get("subscription_url"):
@@ -106,6 +120,9 @@ def format_config_message(data: dict) -> str:
                 break
     if vless:
         lines.append(f"🌐 <b>VLESS Reality ссылка:</b>\n<code>{vless}</code>\n")
+    exp = format_expiry(data)
+    if exp:
+        lines.append(exp + "\n")
     lines.append("📦 Sing-box конфиг пришлю отдельным файлом ниже.")
     return "\n".join(lines)
 
@@ -235,13 +252,16 @@ async def send_expiry_notifications() -> int:
         if not tg_id:
             continue
         when = "скоро"
+        left = ""
         if expires_at:
             dt = datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
             when = dt.strftime("%d.%m.%Y %H:%M UTC")
+            days = (dt - datetime.now(timezone.utc)).total_seconds() / 86400
+            left = f" (осталось ~{days:.0f} дн.)" if days >= 1 else " (осталось менее суток)"
         text = (
             "🔔 <b>Напоминание о подписке</b>\n\n"
-            f"Ваша подписка истекает <b>{when}</b>.\n"
-            "Чтобы не потерять доступ — продлите её заранее через 🔑 Купить ключ VPN."
+            f"Ваша подписка истекает <b>{when}</b>{left}.\n"
+            "Чтобы не потерять доступ — продлите её через 🔑 Купить ключ VPN."
         )
         try:
             await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
