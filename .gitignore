@@ -47,3 +47,7 @@ server
 *.db
 *.sqlite
 *.sqlite3
+
+# Python bytecode cache
+bot/__pycache__/
+__pycache__/

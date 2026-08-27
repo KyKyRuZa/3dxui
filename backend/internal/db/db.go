@@ -73,6 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_panel_email ON subscriptions(panel_email);
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_expiry_notify_date DATE;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_expired_notify_date DATE;
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE;
 

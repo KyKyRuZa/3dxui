@@ -316,6 +316,28 @@ func (h *Handler) botReferral(c *gin.Context) {
 	})
 }
 
+// webReferral returns the current web user's referral stats and the bot
+// username needed to build a shareable t.me deep link. Mirrors botReferral but
+// is authenticated with the user's JWT instead of the bot API secret.
+func (h *Handler) webReferral(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	code, invited, earned, err := h.store.GetReferralStats(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"referral_code": code,
+		"invited":       invited,
+		"earned_days":   earned,
+		"bot_username":  h.cfg.BotUsername,
+	})
+}
+
 func expiresAtMillis(nt sql.NullTime) int64 {
 	if nt.Valid {
 		return nt.Time.UnixMilli()
@@ -393,6 +415,37 @@ func (h *Handler) botExpiring(c *gin.Context) {
 	if len(ids) > 0 {
 		if err := h.store.MarkExpiryNotified(ctx, ids); err != nil {
 			fmt.Printf("DEBUG botExpiring: mark notified ERROR err=%v\n", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": users})
+}
+
+// botExpired returns subscriptions that just expired (last 24h) and have not
+// been notified about the expiry yet, marking them notified for today.
+func (h *Handler) botExpired(c *gin.Context) {
+	ctx := c.Request.Context()
+	since := time.Now().Add(-24 * time.Hour)
+	items, err := h.store.GetExpiredSubscriptions(ctx, since)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	ids := make([]int64, 0, len(items))
+	users := make([]gin.H, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+		users = append(users, gin.H{
+			"telegram_id": it.TelegramID,
+			"username":    it.Username,
+			"expires_at":  it.ExpiresAt.UnixMilli(),
+		})
+	}
+
+	if len(ids) > 0 {
+		if err := h.store.MarkExpiredNotified(ctx, ids); err != nil {
+			fmt.Printf("DEBUG botExpired: mark notified ERROR err=%v\n", err)
 		}
 	}
 

@@ -30,6 +30,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	api := r.Group("/api")
 	{
 		api.GET("/health", h.health)
+		api.GET("/config", h.publicConfig)
 
 		auth := api.Group("/auth")
 		{
@@ -58,6 +59,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bot.POST("/user", h.botEnsureUser)
 			bot.GET("/user/:telegram_id", h.botGetUser)
 			bot.GET("/notifications/expiring", h.botExpiring)
+			bot.GET("/notifications/expired", h.botExpired)
 			bot.POST("/referral", h.botReferral)
 		}
 
@@ -67,9 +69,23 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bill.POST("/create", middleware.AuthRequired(h.jwt), h.createPayment)
 			bill.POST("/webhook", h.billingWebhook)
 		}
+
+		ref := api.Group("/referral")
+		ref.Use(middleware.AuthRequired(h.jwt))
+		{
+			ref.GET("/", h.webReferral)
+		}
 	}
 }
 
 func (h *Handler) health(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "ok"})
+}
+
+// publicConfig exposes non-sensitive, public runtime flags the frontend needs
+// (e.g. whether the YooKassa store is in test mode) without requiring auth.
+func (h *Handler) publicConfig(c *gin.Context) {
+	c.JSON(200, gin.H{
+		"yookassa_test_mode": h.cfg.YookassaTestMode,
+	})
 }

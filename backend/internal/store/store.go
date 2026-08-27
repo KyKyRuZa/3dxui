@@ -254,6 +254,48 @@ UPDATE subscriptions SET last_expiry_notify_date = CURRENT_DATE WHERE id = ANY($
 	return err
 }
 
+// GetExpiredSubscriptions returns subscriptions that have just expired (within
+// the last `since` window), belong to users with a Telegram id, and have not
+// already been notified about the expiry today. Used for the one-shot
+// "subscription ended — buy now" push.
+func (s *Store) GetExpiredSubscriptions(ctx context.Context, since time.Time) ([]ExpiringItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT s.id, u.telegram_id, u.username, s.expires_at
+FROM subscriptions s
+JOIN users u ON u.id = s.user_id
+WHERE s.expires_at IS NOT NULL
+  AND s.expires_at <= NOW()
+  AND s.expires_at > $1
+  AND u.telegram_id IS NOT NULL
+  AND (s.last_expired_notify_date IS NULL OR s.last_expired_notify_date < CURRENT_DATE)
+ORDER BY s.expires_at DESC`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]ExpiringItem, 0)
+	for rows.Next() {
+		var it ExpiringItem
+		if err := rows.Scan(&it.ID, &it.TelegramID, &it.Username, &it.ExpiresAt); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// MarkExpiredNotified records that the given subscriptions were notified about
+// their expiry today, so the loop does not re-send on the same calendar day.
+func (s *Store) MarkExpiredNotified(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+UPDATE subscriptions SET last_expired_notify_date = CURRENT_DATE WHERE id = ANY($1)`, pq.Array(ids))
+	return err
+}
+
 // UpdateSubscriptionExpiry extends (or sets) a subscription's expiry timestamp.
 func (s *Store) UpdateSubscriptionExpiry(ctx context.Context, subID int64, expiresAt time.Time) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE subscriptions SET expires_at = $1 WHERE id = $2`, expiresAt, subID)

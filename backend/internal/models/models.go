@@ -60,6 +60,7 @@ type Subscription struct {
 	CreatedAt            time.Time      `json:"created_at" db:"created_at"`
 	ExpiresAt            sql.NullTime   `json:"expires_at" db:"expires_at"`
 	LastExpiryNotifyDate sql.NullTime   `json:"-" db:"last_expiry_notify_date"`
+	LastExpiredNotifyDate sql.NullTime  `json:"-" db:"last_expired_notify_date"`
 }
 
 // Plan describes a purchasable VPN subscription tier. Price is stored in the

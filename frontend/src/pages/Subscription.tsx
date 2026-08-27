@@ -1,11 +1,30 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@components/Button";
 import { useAuth } from "@hooks/useAuth";
 import { activateSubscription, type Subscription as Sub } from "@api/subscription";
+import Referral from "@components/Referral";
 import styles from "@styles/Subscription.module.css";
+
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function daysLeft(ms: number): string {
+  const days = (ms - Date.now()) / 86400000;
+  if (days >= 1) return `~${Math.ceil(days)} дн.`;
+  return "менее суток";
+}
 
 export default function Subscription() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [sub, setSub] = useState<Sub | null>(null);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<"link" | "vless" | null>(null);
@@ -48,9 +67,36 @@ export default function Subscription() {
     }
   };
 
+  const expired = !!sub?.expires_at && sub.expires_at <= Date.now();
+
   return (
     <div className={`section ${styles.sectionFlush}`}>
       {error && <div className={styles.error}>{error}</div>}
+
+      {expired && (
+        <div className={styles.expiredBanner}>
+          <div className={styles.expiredTitle}>
+            🚨 Подписка истекла — вы снова без защиты
+          </div>
+          <p className={styles.expiredText}>
+            Пока без VPN нужные сайты и сервисы для вас закрыты. Верните доступ
+            одним тапом: купите тариф и получите готовый конфиг за минуту. Или
+            пригласите друга и получите <b>+7 дней бесплатно</b>.
+          </p>
+          <div className={styles.expiredActions}>
+            <Button onClick={() => navigate("/pricing")}>
+              🔑 Купить ключ VPN
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {sub?.expires_at && !expired && (
+        <div className={styles.activeBadge}>
+          ✅ Подписка активна до <b>{formatDate(sub.expires_at)}</b> (осталось{" "}
+          {daysLeft(sub.expires_at)})
+        </div>
+      )}
 
       <div className="card">
         <div className={styles.cardTitle}>QR код (VLESS)</div>
@@ -94,6 +140,10 @@ export default function Subscription() {
             {copied === "link" ? "Скопировано" : "Скопировать ссылку"}
           </Button>
         </div>
+      </div>
+
+      <div className={`card ${styles.cardMt}`}>
+        <Referral />
       </div>
     </div>
   );

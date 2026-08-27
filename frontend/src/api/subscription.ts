@@ -6,6 +6,7 @@ export interface Subscription {
   group: string;
   vless: string;
   links: string[];
+  expires_at: number;
 }
 
 export interface VLESSConfig {

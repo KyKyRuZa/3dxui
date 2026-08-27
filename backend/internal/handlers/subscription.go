@@ -314,5 +314,6 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		"username":         panelEmail,
 		"group":            sub.GroupName,
 		"vless":            vlessLink,
+		"expires_at":       expiryMs,
 	})
 }

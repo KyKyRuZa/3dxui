@@ -68,6 +68,31 @@ async def backend_referral(telegram_id: int) -> dict | None:
     return resp.json()
 
 
+async def referral_link(telegram_id: int) -> str | None:
+    """Return this user's referral deep link, or None if unavailable."""
+    try:
+        data = await backend_referral(telegram_id)
+    except Exception:  # noqa: BLE001
+        return None
+    if not data or not data.get("referral_code"):
+        return None
+    try:
+        me = await bot.get_me()
+    except Exception:  # noqa: BLE001
+        return None
+    return f"https://t.me/{me.username}?start={data['referral_code']}"
+
+
+def referral_anchor(link: str | None) -> str:
+    """A pushy referral upsell appended to sales messages."""
+    if not link:
+        return ""
+    return (
+        "\n\n🤝 <b>Не хотите платить?</b> Пригласите друга по вашей ссылке и получите "
+        f"<b>+7 дней бесплатно</b> за каждую его покупку тарифа:\n<code>{link}</code>"
+    )
+
+
 async def backend_get_user(telegram_id: int) -> dict | None:
     resp = await http_client.get(
         f"{BACKEND_URL}/api/bot/user/{telegram_id}",
@@ -83,6 +108,17 @@ async def backend_get_user(telegram_id: int) -> dict | None:
 async def backend_expiring(hours: int = 72) -> list[dict]:
     resp = await http_client.get(
         f"{BACKEND_URL}/api/bot/notifications/expiring",
+        headers=api_headers(),
+        params={"hours": hours},
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("users", [])
+
+
+async def backend_expired(hours: int = 24) -> list[dict]:
+    resp = await http_client.get(
+        f"{BACKEND_URL}/api/bot/notifications/expired",
         headers=api_headers(),
         params={"hours": hours},
         timeout=30,
@@ -124,7 +160,7 @@ def format_expiry(data: dict) -> str | None:
         return f"⏳ Подписка активна до <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b> (осталось ~{days:.0f} дн.)"
     if days > 0:
         return f"⏳ Подписка активна до <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b> (осталось менее суток)"
-    return f"⚠️ Подписка истекла <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b>. Продлите через 🔑 Купить ключ VPN."
+    return f"🚨 <b>Подписка истекла {dt.strftime('%d.%m.%Y %H:%M UTC')}!</b> Вы снова без защиты. Нажмите 🔑 Купить ключ VPN прямо сейчас — и вернёте доступ за минуту."
 
 
 def format_config_message(data: dict) -> str:
@@ -226,7 +262,17 @@ async def cmd_id(message: types.Message) -> None:
 async def cmd_status(message: types.Message) -> None:
     data = await backend_get_user(message.from_user.id)
     if not data or not data.get("provisioned"):
-        await message.answer("У вас ещё нет активного ключа. Нажмите 🔑 Купить ключ VPN.", reply_markup=main_menu_keyboard())
+        link = await referral_link(message.from_user.id)
+        await message.answer(
+            "🚨 <b>У вас нет активного VPN-ключа — вы уже в изоляции.</b>\n\n"
+            "Пока без защиты, нужные сайты и сервисы для вас закрыты, а о ваших действиях известно больше, "
+            "чем стоило бы.\n\n"
+            "⚡ <b>Исправьте это одним тапом:</b> нажмите <b>🔑 Купить ключ VPN</b> — и через минуту у вас будет "
+            "готовый конфиг для обхода блокировок (Hiddify / v2rayNG / Sing-box).\n\n"
+            "🔥 Не откладывайте — каждый час без VPN это упущенная свобода. Верните доступ прямо сейчас!"
+            + referral_anchor(link),
+            reply_markup=main_menu_keyboard(),
+        )
         return
     await message.answer(format_config_message(data), reply_markup=main_menu_keyboard())
 
@@ -278,7 +324,16 @@ async def callbacks(callback: types.CallbackQuery):
     if callback.data == "status":
         data = await backend_get_user(callback.from_user.id)
         if not data or not data.get("provisioned"):
-            text = "У вас ещё нет активного ключа. Нажмите 🔑 Купить ключ VPN."
+            link = await referral_link(callback.from_user.id)
+            text = (
+                "🚨 <b>У вас нет активного VPN-ключа — вы уже в изоляции.</b>\n\n"
+                "Пока без защиты, нужные сайты и сервисы для вас закрыты, а о ваших действиях известно больше, "
+                "чем стоило бы.\n\n"
+                "⚡ <b>Исправьте это одним тапом:</b> нажмите <b>🔑 Купить ключ VPN</b> — и через минуту у вас будет "
+                "готовый конфиг для обхода блокировок (Hiddify / v2rayNG / Sing-box).\n\n"
+                "🔥 Не откладывайте — каждый час без VPN это упущенная свобода. Верните доступ прямо сейчас!"
+                + referral_anchor(link)
+            )
         else:
             text = format_config_message(data)
         if callback.message is not None:
@@ -317,11 +372,57 @@ async def send_expiry_notifications() -> int:
             when = dt.strftime("%d.%m.%Y %H:%M UTC")
             days = (dt - datetime.now(timezone.utc)).total_seconds() / 86400
             left = f" (осталось ~{days:.0f} дн.)" if days >= 1 else " (осталось менее суток)"
+        # Last-day / final-chance wording: more urgent when it's within a day.
+        if days < 1:
+            text = (
+                "⏰ <b>Последний день вашей подписки!</b>\n\n"
+                f"Доступ закроется уже <b>{when}</b>. После этого вы снова окажетесь за блокировками — "
+                "и вернётесь к ним не сами по себе.\n\n"
+                "🔥 <b>Продлите прямо сейчас:</b> нажмите <b>🔑 Купить ключ VPN</b> — это займёт меньше минуты "
+                "и сохранит ваш доступ без перерыва. Не дайте себе оказаться в изоляции."
+            )
+        else:
+            text = (
+                "🔔 <b>Напоминание о подписке</b>\n\n"
+                f"Ваша подписка истекает <b>{when}</b>{left}.\n"
+                "Чтобы не потерять доступ — продлите её через 🔑 Купить ключ VPN."
+            )
+        text += referral_anchor(await referral_link(tg_id))
+        try:
+            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            sent += 1
+        except TelegramBadRequest as e:
+            logger.warning("cannot notify %s: %s", tg_id, e)
+    return sent
+
+
+async def send_expired_notifications() -> int:
+    try:
+        expired = await backend_expired(hours=168)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("failed to fetch expired users: %s", e)
+        return 0
+
+    sent = 0
+    for item in expired:
+        tg_id = item.get("telegram_id")
+        expires_at = item.get("expires_at", 0)
+        if not tg_id:
+            continue
+        when = ""
+        if expires_at:
+            dt = datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
+            when = dt.strftime("%d.%m.%Y %H:%M UTC")
         text = (
-            "🔔 <b>Напоминание о подписке</b>\n\n"
-            f"Ваша подписка истекает <b>{when}</b>{left}.\n"
-            "Чтобы не потерять доступ — продлите её через 🔑 Купить ключ VPN."
+            "🚨 <b>Доступ перекрыт — вы снова в изоляции.</b>\n\n"
+            f"С <b>{when}</b> нужные сайты и сервисы для вас снова закрыты, а каждый час без защиты — "
+            "это упущенная свобода и лишние риски.\n\n"
+            "⚡ <b>Верните всё одним тапом:</b> нажмите <b>🔑 Купить ключ VPN</b> — и через минуту у вас будет "
+            "свежий конфиг для обхода блокировок (Hiddify / v2rayNG / Sing-box).\n\n"
+            "🔥 Не откладывайте: пока вы раздумываете, доступ не вернётся сам. "
+            "Действуйте прямо сейчас и снова будьте везде."
         )
+        text += referral_anchor(await referral_link(tg_id))
         try:
             await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
             sent += 1
@@ -337,6 +438,9 @@ async def notification_loop() -> None:
             sent = await send_expiry_notifications()
             if sent:
                 logger.info("sent %d expiry notifications", sent)
+            sent_expired = await send_expired_notifications()
+            if sent_expired:
+                logger.info("sent %d expired-subscription nudges", sent_expired)
         except Exception as e:  # noqa: BLE001
             logger.exception("notification loop error: %s", e)
 

@@ -52,8 +52,13 @@
 - `GET /api/bot/notifications/expiring` реально отдаёт юзеров с `expires_at` в окне
   `[now, now+2 дня]` и `last_expiry_notify_date != CURRENT_DATE`, и сразу проставляет
   «уведомлено сегодня» (дедуп по суткам, переживает рестарт бота).
-- Бот `send_expiry_notifications` шлёт «осталось ~N дн.»; фоновый цикл раз в `NOTIFY_INTERVAL`
-  (по умолч. 3600с). Проверено на `tg_699469085`: `expires_at` = now+2д, уведомление приходит.
+- Бот `send_expiry_notifications` шлёт «осталось ~N дн.» (в последний день — более срочная
+  «Последний день подписки!»), а `send_expired_notifications` (ранее НЕ был подключён к циклу)
+  теперь тоже вызывается из `notification_loop` и шлёт навязчивую «купите ключ» рассылку
+  ежедневно в течение 7 дней после истечения (`backend_expired(hours=168)`). Дедуп по
+  `last_expired_notify_date` (раз в сутки, переживает рестарт).
+- Фоновый цикл раз в `NOTIFY_INTERVAL` (по умолч. 3600с). Проверено на `tg_699469085`:
+  `expires_at` = now+2д, уведомление приходит.
 
 ### 3.3 Реферальная программа — ФУНДАМЕНТ ГОТОВ (без биллинга)
 - `users.referral_code` (уникальный; существующим юзерам backfill как `ref<id>`).
@@ -64,6 +69,10 @@
   число приглашённых и начисленных дней.
 - `CreditReferralReward` готов начислить рефереру **+7 дней** (`REFERRAL_REWARD_DAYS`)
   и теперь вызывается из биллинг-webhook (`handlers/billing.go`) при успешном платеже.
+- **Веб-рефералы**: добавлен `GET /api/referral` (JWT, `handlers/bot.go:webReferral`),
+  зеркалит бот-эндпоинт и отдаёт `referral_code`, `invited`, `earned_days`, `bot_username`.
+  Фронт `frontend/src/components/Referral.tsx` строит `t.me/<bot_username>?start=<code>`,
+  копирует ссылку и показывает счётчики. `bot_username` берётся из `BOT_USERNAME` (дефолт `AutoColorsBot`).
 
 ### 3.4 Прочие правки (важно для контекста)
 - `BOT_API_SECRET` теперь проброшен в `backend` и сервис `bot` добавлен в compose
@@ -99,6 +108,10 @@
   `provisionPlan` создаёт клиента в 3x-ui → `expires_at` = now+30 дней. Смена на
   боевой магазин — только `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` в `.env` и
   `docker compose up -d --build backend`; код менять не нужно.
+- **Фронт знает про тестовый магазин**: бэкенд отдаёт `GET /api/config`
+  (`{yookassa_test_mode}`; `true`, если `YOOKASSA_SECRET_KEY` начинается с `test_` или
+  `YOOKASSA_TEST_MODE=true`), и `PricingCards` показывает жёлтый бейдж «🧪 Тестовый режим
+  оплаты». Кнопки «Купить» уже привязаны к ЮKassa через `/api/billing/create`.
 
 ## 4. Что в планах (не сделано)
 
@@ -107,12 +120,19 @@
    `YOOKASSA_SECRET_KEY` на боевой и проверить реальное списание.
 2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
    но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
-3. **One-shot уведомление в день истечения** («подписка закончилась — продлите»).
-4. **Веб-дашборд**: показывать `expires_at` (API уже отдаёт) в `Subscription.tsx`
-   (фронт пока не выводит срок). Кнопка покупки тарифа — **СДЕЛАНА**:
-   `PricingCards` грузит планы с `/api/billing/plans` и по «Купить» создаёт платёж
-   через `/api/billing/create`, открывает `confirmation_url` ЮKassa в новой вкладке;
-   после оплаты webhook продлевает подписку.
+3. **Уведомление после истечения + навязчивая фраза покупки** — СДЕЛАНО:
+   `send_expired_notifications` подключён к `notification_loop` и шлёт «купите ключ» ежедневно
+   7 дней после истечения; сообщения `/status`, `callback status` и `format_expiry` (просрочка)
+   заменены на pushy-копию («вы в изоляции, верните доступ одним тапом»).
+4. **Веб-дашборд**: `expires_at` теперь выводится в `Subscription.tsx` — зелёный
+   бейдж «Подписка активна до … (осталось N дн.)» и красный pushy-баннер
+   «Подписка истекла — верните доступ» с кнопкой «🔑 Купить ключ VPN» (ведёт на
+   `/pricing`). Добавлен реферальный виджет `Referral.tsx` (ссылка + счётчики).
+   Кнопка покупки тарифа — **СДЕЛАНА**: `PricingCards` грузит планы с
+   `/api/billing/plans` и по «Купить» создаёт платёж через `/api/billing/create`,
+   открывает `confirmation_url` ЮKassa в новой вкладке; при тестовом магазине
+   показывается жёлтый бейдж «🧪 Тестовый режим оплаты» (флаг с `/api/config`).
+   После оплаты webhook продлевает подписку.
 5. **Чистка DEBUG-логов**: в `bot.go`/`auth.go`/`subscription.go`/`panel/client.go` много
    `fmt.Printf("DEBUG ...")` — заменить на zap.
 6. **Админ-панель / управление планами** — опционально.
@@ -172,3 +192,7 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - Бот (aiogram): `bot/main.py`
 - Деплой: `docker-compose.yml`, `bot/Dockerfile`, `nginx/conf.d/default.conf`
 - Фронт (биллинг-кнопка): `frontend/src/api/billing.ts`, `frontend/src/components/PricingCards.tsx`
+- Фронт (подписка/рефералы/тест-бейдж): `frontend/src/pages/Subscription.tsx`,
+  `frontend/src/components/Referral.tsx`, `frontend/src/api/referral.ts`,
+  `frontend/src/api/config.ts`, `frontend/src/styles/Subscription.module.css`,
+  `frontend/src/styles/Referral.module.css`

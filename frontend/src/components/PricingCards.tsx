@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@components/Button";
 import { createPayment, getPlans, type Plan } from "@api/billing";
+import { getPublicConfig } from "@api/config";
 import { resetSubscriptionCache } from "@api/subscription";
 import styles from "@styles/PricingCards.module.css";
 
@@ -27,12 +28,16 @@ export default function PricingCards() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+  const [testMode, setTestMode] = useState(false);
 
   useEffect(() => {
     getPlans()
       .then(setPlans)
       .catch(() => setError("Не удалось загрузить тарифы"))
       .finally(() => setLoading(false));
+    getPublicConfig()
+      .then((cfg) => setTestMode(cfg.yookassa_test_mode))
+      .catch(() => {});
   }, []);
 
   async function handleBuy(plan: Plan) {
@@ -74,6 +79,12 @@ export default function PricingCards() {
       <div className="container">
         {error && <div className={styles.error}>{error}</div>}
         {info && <div className={styles.info}>{info}</div>}
+        {testMode && (
+          <div className={styles.testMode}>
+            🧪 Тестовый режим оплаты (ЮKassa): для проверки используйте тестовую
+            карту, реальное списание не произойдёт.
+          </div>
+        )}
         <div className={styles.list}>
           {plans.map((p) => (
             <div key={p.id} className={styles.card}>

@@ -19,6 +19,7 @@ type Config struct {
 	JWTPrivateKey           string
 	CORSDomain              string
 	BotToken                string
+	BotUsername             string
 	AdminAPISecret          string
 	BotAPISecret            string
 	PanelURL                string
@@ -37,6 +38,7 @@ type Config struct {
 	YookassaSecretKey string
 	YookassaAPIURL    string
 	YookassaReturnURL string
+	YookassaTestMode  bool
 }
 
 func Load() (*Config, error) {
@@ -59,6 +61,7 @@ func Load() (*Config, error) {
 		JWTSecret:               viper.GetString("jwt_secret"),
 		CORSDomain:              viper.GetString("cors_domain"),
 		BotToken:                viper.GetString("bot_token"),
+		BotUsername:             viper.GetString("bot_username"),
 		AdminAPISecret:          viper.GetString("admin_api_secret"),
 		BotAPISecret:            viper.GetString("bot_api_secret"),
 		PanelURL:                viper.GetString("panel_url"),
@@ -75,8 +78,12 @@ func Load() (*Config, error) {
 		YookassaSecretKey:       viper.GetString("yookassa_secret_key"),
 		YookassaAPIURL:          viper.GetString("yookassa_api_url"),
 		YookassaReturnURL:       viper.GetString("yookassa_return_url"),
+		YookassaTestMode:        viper.GetBool("yookassa_test_mode") || strings.HasPrefix(viper.GetString("yookassa_secret_key"), "test_"),
 	}
 
+	if cfg.BotUsername == "" {
+		cfg.BotUsername = "AutoColorsBot"
+	}
 	if cfg.DefaultGroup == "" {
 		cfg.DefaultGroup = "Free"
 	}
