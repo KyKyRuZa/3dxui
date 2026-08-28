@@ -143,6 +143,11 @@
 5. **Чистка DEBUG-логов**: в `bot.go`/`auth.go`/`subscription.go`/`panel/client.go` много
    `fmt.Printf("DEBUG ...")` — заменить на zap.
 6. **Админ-панель / управление планами** — опционально.
+7. **Обход DNS-блокировки сайта покупателями**: добавлена команда `/fix` и кнопка
+   «🔧 Починить доступ к сайту» в боте. Бот спрашивает ОС и отправляет готовые скрипты
+   `add_hosts_windows.bat` и `add_hosts_linux_macos.sh`, которые прописывают
+   `2.26.138.90 thenomoreblocks.com` в `/etc/hosts` и сбрасывают DNS-кэш. Скрипты лежат
+   в `bot/` и копируются в образ бота через Dockerfile.
 
 ## 5. Как запускать и проверять
 
@@ -206,7 +211,7 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - Модели: `backend/internal/models/models.go`
 - Store-методы (включая рефералы/начисления/планы/платежи): `backend/internal/store/store.go`
 - Конфиг (дни подписки/уведомлений/рефералов/юкасса): `backend/internal/config/config.go`
-- Бот (aiogram): `bot/main.py`
+- Бот (aiogram): `bot/main.py`, `bot/add_hosts_windows.bat`, `bot/add_hosts_linux_macos.sh`
 - Деплой: `docker-compose.yml`, `bot/Dockerfile`, `nginx/conf.d/default.conf`
 - Фронт (биллинг-кнопка): `frontend/src/api/billing.ts`, `frontend/src/components/PricingCards.tsx`
 - Фронт (подписка/рефералы/тест-бейдж): `frontend/src/pages/Subscription.tsx`,

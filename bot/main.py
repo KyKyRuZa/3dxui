@@ -133,6 +133,7 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🔑 Купить ключ VPN", callback_data="buy")],
             [InlineKeyboardButton(text="📊 Моя подписка", callback_data="status")],
             [InlineKeyboardButton(text="🤝 Реферальная программа", callback_data="referral")],
+            [InlineKeyboardButton(text="🔧 Починить доступ к сайту", callback_data="fix")],
             [InlineKeyboardButton(text="📖 Инструкция", callback_data="instructions")],
             [InlineKeyboardButton(text="🪝 Открыть WebApp", web_app=types.WebAppInfo(url=WEB_APP_URL))],
         ]
@@ -147,6 +148,35 @@ def reply_open_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=False,
     )
+
+
+FIX_WINDOWS_PATH = "/app/add_hosts_windows.bat"
+FIX_MACOS_LINUX_PATH = "/app/add_hosts_linux_macos.sh"
+
+
+def fix_os_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🪟 Windows", callback_data="fix_windows")],
+            [InlineKeyboardButton(text="🍎 macOS", callback_data="fix_macos")],
+            [InlineKeyboardButton(text="🐧 Linux", callback_data="fix_linux")],
+        ]
+    )
+
+
+async def send_hosts_script(message: types.Message | None, path: str, caption: str) -> None:
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except Exception:
+        if message is not None:
+            await message.answer("❌ Файл не найден. Свяжитесь с поддержкой.")
+        return
+    if message is not None:
+        await message.answer_document(
+            types.BufferedInputFile(data, filename=os.path.basename(path)),
+            caption=caption,
+        )
 
 
 def format_expiry(data: dict) -> str | None:
@@ -288,6 +318,17 @@ async def cmd_notify(message: types.Message) -> None:
     await message.answer("✅ Проверка истекающих подписок выполнена.")
 
 
+@dp.message(Command("fix"))
+async def cmd_fix(message: types.Message) -> None:
+    await message.answer(
+        "🔧 <b>Починить доступ к сайту</b>\n\n"
+        "Сейчас у некоторых провайдеров не работает DNS для нашего сайта. "
+        "Чтобы открыть сайт без VPN, подскажите компьютеру правильный IP через файл hosts.\n\n"
+        "Выберите вашу систему:",
+        reply_markup=fix_os_keyboard(),
+    )
+
+
 @dp.message(lambda m: m.web_app_data is not None)
 async def web_app_data(message: types.Message) -> None:
     data = message.web_app_data.data
@@ -338,6 +379,47 @@ async def callbacks(callback: types.CallbackQuery):
             text = format_config_message(data)
         if callback.message is not None:
             await callback.message.answer(text, reply_markup=main_menu_keyboard())
+        return
+    if callback.data == "fix_windows":
+        caption = (
+            "🪟 <b>Windows</b>\n\n"
+            "1. Сохрани файл.\n"
+            "2. Нажми правой кнопкой → «Запуск от имени администратора».\n"
+            "3. Если спросит обновление — нажми Y.\n"
+            "4. Дождись надписи «ГОТОВО!».\n\n"
+            "Если не помогло — отключи VPN/прокси и перезагрузи компьютер."
+        )
+        await send_hosts_script(callback.message, FIX_WINDOWS_PATH, caption)
+        if callback.message is not None:
+            await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
+        return
+    if callback.data == "fix_macos":
+        caption = (
+            "🍎 <b>macOS</b>\n\n"
+            "1. Сохрани файл.\n"
+            "2. Открой терминал, перейди в папку со файлом.\n"
+            "3. Выполни: <code>chmod +x add_hosts_linux_macos.sh</code>\n"
+            "4. Затем: <code>sudo ./add_hosts_linux_macos.sh</code>\n"
+            "5. Введи пароль администратора.\n\n"
+            "Если не помогло — отключи VPN/прокси и перезагрузи компьютер."
+        )
+        await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
+        if callback.message is not None:
+            await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
+        return
+    if callback.data == "fix_linux":
+        caption = (
+            "🐧 <b>Linux</b>\n\n"
+            "1. Сохрани файл.\n"
+            "2. Открой терминал, перейди в папку со файлом.\n"
+            "3. Выполни: <code>chmod +x add_hosts_linux_macos.sh</code>\n"
+            "4. Затем: <code>sudo ./add_hosts_linux_macos.sh</code>\n"
+            "5. Введи пароль администратора.\n\n"
+            "Если не помогло — перезагрузи систему."
+        )
+        await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
+        if callback.message is not None:
+            await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
         return
     if callback.data == "instructions":
         text = (
