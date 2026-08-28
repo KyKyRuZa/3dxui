@@ -380,6 +380,16 @@ async def callbacks(callback: types.CallbackQuery):
         if callback.message is not None:
             await callback.message.answer(text, reply_markup=main_menu_keyboard())
         return
+    if callback.data == "fix":
+        if callback.message is not None:
+            await callback.message.answer(
+                "🔧 <b>Починить доступ к сайту</b>\n\n"
+                "Сейчас у некоторых провайдеров не работает DNS для нашего сайта. "
+                "Чтобы открыть сайт без VPN, подскажите компьютеру правильный IP через файл hosts.\n\n"
+                "Выберите вашу систему:",
+                reply_markup=fix_os_keyboard(),
+            )
+        return
     if callback.data == "fix_windows":
         caption = (
             "🪟 <b>Windows</b>\n\n"
