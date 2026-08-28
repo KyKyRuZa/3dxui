@@ -67,26 +67,26 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 
 		var addClientInfo *panel.ClientInfo
 		if _, getErr := h.panel.GetClient(ctx, panelEmail); getErr != nil {
-			fmt.Printf("DEBUG botEnsureUser: creating client email=%s err=%v\n", panelEmail, getErr)
+			h.log.Debugw("botEnsureUser: creating client", "email", maskStr(panelEmail), "error", getErr)
 			addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
 			if err != nil {
-				fmt.Printf("DEBUG botEnsureUser: AddClient ERROR email=%s err=%v\n", panelEmail, err)
+				h.log.Errorw("botEnsureUser: AddClient error", "email", maskStr(panelEmail), "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client"})
 				return
 			}
 			if addClientInfo != nil && addClientInfo.SubID != "" {
-				fmt.Printf("DEBUG botEnsureUser: AddClient OK email=%s subId=%s (from response)\n", panelEmail, addClientInfo.SubID)
+				h.log.Infow("botEnsureUser: AddClient ok", "email", maskStr(panelEmail), "subId", addClientInfo.SubID)
 			} else {
-				fmt.Printf("DEBUG botEnsureUser: AddClient OK email=%s\n", panelEmail)
+				h.log.Infow("botEnsureUser: AddClient ok", "email", maskStr(panelEmail))
 			}
 		}
 
 		if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
-			fmt.Printf("DEBUG botEnsureUser: AddToGroup ERROR email=%s group=%s err=%v\n", panelEmail, h.cfg.DefaultGroup, err)
+			h.log.Errorw("botEnsureUser: AddToGroup error", "email", maskStr(panelEmail), "group", h.cfg.DefaultGroup, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add to group"})
 			return
 		}
-		fmt.Printf("DEBUG botEnsureUser: AddToGroup OK email=%s group=%s\n", panelEmail, h.cfg.DefaultGroup)
+		h.log.Infow("botEnsureUser: AddToGroup ok", "email", maskStr(panelEmail), "group", h.cfg.DefaultGroup)
 
 		var clientInfo *panel.ClientInfo
 		if addClientInfo != nil && addClientInfo.SubID != "" {
@@ -94,12 +94,12 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 		} else {
 			clientInfo, err = h.panel.GetClient(ctx, panelEmail)
 			if err != nil {
-				fmt.Printf("DEBUG botEnsureUser: GetClient ERROR email=%s err=%v\n", panelEmail, err)
+				h.log.Errorw("botEnsureUser: GetClient error", "email", maskStr(panelEmail), "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
 				return
 			}
 		}
-		fmt.Printf("DEBUG botEnsureUser: GetClient OK email=%s subId=%s\n", panelEmail, clientInfo.SubID)
+		h.log.Infow("botEnsureUser: GetClient ok", "email", maskStr(panelEmail), "subId", clientInfo.SubID)
 
 		sub = &models.Subscription{
 			UserID:     user.ID,
@@ -113,12 +113,12 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			if errors.Is(err, store.ErrConflict) {
 				sub, err = h.store.GetUserSubscription(ctx, user.ID)
 			} else {
-				fmt.Printf("DEBUG botEnsureUser: CreateSubscription ERROR userID=%d err=%v\n", user.ID, err)
+				h.log.Errorw("botEnsureUser: CreateSubscription error", "userID", maskInt(user.ID), "error", err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 				return
 			}
 		}
-		fmt.Printf("DEBUG botEnsureUser: CreateSubscription OK userID=%d subId=%s\n", user.ID, clientInfo.SubID)
+		h.log.Infow("botEnsureUser: CreateSubscription ok", "userID", maskInt(user.ID), "subId", clientInfo.SubID)
 
 		// Referral: record a pending referral for the referrer (rewarded on the
 		// referred user's first paid purchase) and grant the referred user a
@@ -140,7 +140,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	// time-limited model to previously unlimited (grandfathered) subscriptions.
 	if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(time.Now()) {
 		if err := h.renewSubscription(ctx, sub); err != nil {
-			fmt.Printf("DEBUG botEnsureUser: renew ERROR userID=%d err=%v\n", user.ID, err)
+			h.log.Errorw("botEnsureUser: renew error", "userID", maskInt(user.ID), "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to renew subscription"})
 			return
 		}
@@ -165,11 +165,11 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	singbox := []byte{}
 	resp, gerr := http.Get(subURL)
 	if gerr != nil {
-		fmt.Printf("DEBUG botEnsureUser: fetch subscription ERROR url=%s err=%v\n", subURL, gerr)
+		h.log.Errorw("botEnsureUser: fetch subscription error", "url", subURL, "error", gerr)
 	} else {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			fmt.Printf("DEBUG botEnsureUser: subscription not found url=%s status=%d\n", subURL, resp.StatusCode)
+			h.log.Warnw("botEnsureUser: subscription not found", "url", subURL, "status", resp.StatusCode)
 		} else if body, rerr := io.ReadAll(resp.Body); rerr == nil {
 			singbox = body
 		}
@@ -217,11 +217,11 @@ func (h *Handler) applyReferralSignupBonus(ctx context.Context, sub *models.Subs
 		}
 	}
 	if err := h.panel.UpdateClient(ctx, sub.PanelEmail, subID, newExpiry.UnixMilli(), h.cfg.DefaultInboundIDs); err != nil {
-		fmt.Printf("DEBUG applyReferralSignupBonus: UpdateClient ERROR userID=%d err=%v\n", sub.UserID, err)
+		h.log.Errorw("applyReferralSignupBonus: UpdateClient error", "userID", maskInt(sub.UserID), "error", err)
 		return
 	}
 	if err := h.store.UpdateSubscriptionExpiry(ctx, sub.ID, newExpiry); err != nil {
-		fmt.Printf("DEBUG applyReferralSignupBonus: UpdateSubscriptionExpiry ERROR userID=%d err=%v\n", sub.UserID, err)
+		h.log.Errorw("applyReferralSignupBonus: UpdateSubscriptionExpiry error", "userID", maskInt(sub.UserID), "error", err)
 		return
 	}
 	sub.ExpiresAt = sql.NullTime{Time: newExpiry, Valid: true}
@@ -261,7 +261,7 @@ func (h *Handler) CreditReferralReward(ctx context.Context, referredUserID int64
 	}
 	referrerSub, err := h.store.GetUserSubscription(ctx, ref.ReferrerID)
 	if err != nil {
-		fmt.Printf("DEBUG CreditReferralReward: referrer has no subscription referrer=%d err=%v\n", ref.ReferrerID, err)
+		h.log.Debugw("CreditReferralReward: referrer has no subscription", "referrer", maskInt(ref.ReferrerID), "error", err)
 		return
 	}
 	days := h.cfg.ReferralRewardDays
@@ -277,18 +277,18 @@ func (h *Handler) CreditReferralReward(ctx context.Context, referredUserID int64
 		}
 	}
 	if err := h.panel.UpdateClient(ctx, referrerSub.PanelEmail, subID, newExpiry.UnixMilli(), h.cfg.DefaultInboundIDs); err != nil {
-		fmt.Printf("DEBUG CreditReferralReward: UpdateClient ERROR referrer=%d err=%v\n", ref.ReferrerID, err)
+		h.log.Errorw("CreditReferralReward: UpdateClient error", "referrer", maskInt(ref.ReferrerID), "error", err)
 		return
 	}
 	if err := h.store.UpdateSubscriptionExpiry(ctx, referrerSub.ID, newExpiry); err != nil {
-		fmt.Printf("DEBUG CreditReferralReward: UpdateSubscriptionExpiry ERROR referrer=%d err=%v\n", ref.ReferrerID, err)
+		h.log.Errorw("CreditReferralReward: UpdateSubscriptionExpiry error", "referrer", maskInt(ref.ReferrerID), "error", err)
 		return
 	}
 	if err := h.store.CompleteReferral(ctx, ref.ReferrerID, ref.ReferredID, days); err != nil {
-		fmt.Printf("DEBUG CreditReferralReward: CompleteReferral ERROR err=%v\n", err)
+		h.log.Errorw("CreditReferralReward: CompleteReferral error", "error", err)
 		return
 	}
-	fmt.Printf("DEBUG CreditReferralReward: rewarded referrer=%d days=%d\n", ref.ReferrerID, days)
+	h.log.Infow("CreditReferralReward: rewarded", "referrer", maskInt(ref.ReferrerID), "days", days)
 }
 
 func (h *Handler) botReferral(c *gin.Context) {
@@ -414,7 +414,7 @@ func (h *Handler) botExpiring(c *gin.Context) {
 	// Mark as notified for today so the loop does not re-send on the same day.
 	if len(ids) > 0 {
 		if err := h.store.MarkExpiryNotified(ctx, ids); err != nil {
-			fmt.Printf("DEBUG botExpiring: mark notified ERROR err=%v\n", err)
+			h.log.Errorw("botExpiring: mark notified error", "error", err)
 		}
 	}
 
@@ -445,7 +445,7 @@ func (h *Handler) botExpired(c *gin.Context) {
 
 	if len(ids) > 0 {
 		if err := h.store.MarkExpiredNotified(ctx, ids); err != nil {
-			fmt.Printf("DEBUG botExpired: mark notified ERROR err=%v\n", err)
+			h.log.Errorw("botExpired: mark notified error", "error", err)
 		}
 	}
 

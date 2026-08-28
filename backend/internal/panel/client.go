@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Client struct {
@@ -21,9 +23,10 @@ type Client struct {
 	apiToken   string
 	httpClient *http.Client
 	loggedIn   bool
+	log        *zap.SugaredLogger
 }
 
-func New(baseURL, username, password, apiToken string) *Client {
+func New(baseURL, username, password, apiToken string, log *zap.SugaredLogger) *Client {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -32,8 +35,22 @@ func New(baseURL, username, password, apiToken string) *Client {
 		username:   username,
 		password:   password,
 		apiToken:   apiToken,
-		httpClient: &http.Client{Transport: tr, Timeout: 15 * time.Second},
+		httpClient: &http.Client{Transport: tr, Timeout: 15 * time.Minute},
+		log:        log,
 	}
+}
+
+func maskStr(s string) string {
+	if s == "" {
+		return ""
+	}
+	if i := strings.LastIndex(s, "@"); i > 0 {
+		return "***" + s[i:]
+	}
+	if len(s) <= 4 {
+		return "***"
+	}
+	return "***" + s[len(s)-4:]
 }
 
 func (c *Client) usingToken() bool {
@@ -171,7 +188,7 @@ func (c *Client) GetClient(ctx context.Context, email string) (*ClientInfo, erro
 		return nil, fmt.Errorf("panel GetClient: empty obj")
 	}
 	if wrapper.Obj.SubID == "" {
-		fmt.Printf("DEBUG GetClient: empty subId for email=%s raw=%s\n", email, string(respBody))
+		c.log.Debugw("GetClient: empty subId", "email", maskStr(email))
 		for i := 0; i < 10; i++ {
 			time.Sleep(300 * time.Millisecond)
 			resp, err = c.httpClient.Do(req)

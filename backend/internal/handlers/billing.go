@@ -61,7 +61,7 @@ func (h *Handler) createPayment(c *gin.Context) {
 
 	p, err := h.billing.CreatePayment(idem, amountValue, plan.Currency, description, h.cfg.YookassaReturnURL, metadata)
 	if err != nil {
-		fmt.Printf("DEBUG createPayment: yookassa ERROR userID=%d plan=%s err=%v\n", userID, plan.ID, err)
+		h.log.Errorw("createPayment: yookassa error", "userID", maskInt(userID), "plan", plan.ID, "error", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to create payment"})
 		return
 	}
@@ -75,7 +75,7 @@ func (h *Handler) createPayment(c *gin.Context) {
 		Currency:    plan.Currency,
 	}
 	if err := h.store.CreatePayment(c.Request.Context(), row); err != nil {
-		fmt.Printf("DEBUG createPayment: store ERROR paymentID=%s err=%v\n", p.ID, err)
+		h.log.Errorw("createPayment: store error", "paymentID", maskStr(p.ID), "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -128,7 +128,7 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 	// Re-fetch from the API to verify authenticity and status.
 	verified, err := h.billing.GetPayment(payload.Object.ID)
 	if err != nil {
-		fmt.Printf("DEBUG webhook: verify fetch ERROR paymentID=%s err=%v\n", payload.Object.ID, err)
+		h.log.Errorw("webhook: verify fetch error", "paymentID", maskStr(payload.Object.ID), "error", err)
 		c.JSON(http.StatusOK, gin.H{"ok": true}) // keep retrying later
 		return
 	}
@@ -139,7 +139,7 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 
 	userID, planID := resolvePaymentTarget(ctx, h, verified, payload.Object.ID)
 	if userID == 0 || planID == "" {
-		fmt.Printf("DEBUG webhook: cannot resolve target paymentID=%s\n", payload.Object.ID)
+		h.log.Warnw("webhook: cannot resolve target", "paymentID", maskStr(payload.Object.ID))
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
@@ -152,7 +152,7 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 
 	plan, perr := h.store.GetPlan(ctx, planID)
 	if perr != nil {
-		fmt.Printf("DEBUG webhook: unknown plan paymentID=%s plan=%s err=%v\n", payload.Object.ID, planID, perr)
+		h.log.Errorw("webhook: unknown plan", "paymentID", maskStr(payload.Object.ID), "plan", planID, "error", perr)
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
@@ -162,12 +162,11 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 	// captured, so we must fulfil.
 	gotMinor := amountMinorFromString(verified.Amount.Value)
 	if gotMinor > 0 && gotMinor != plan.PriceMinor {
-		fmt.Printf("DEBUG webhook: amount mismatch paymentID=%s plan=%s expected=%d got=%d\n",
-			payload.Object.ID, plan.ID, plan.PriceMinor, gotMinor)
+		h.log.Warnw("webhook: amount mismatch", "paymentID", maskStr(payload.Object.ID), "plan", plan.ID, "expected", plan.PriceMinor, "got", gotMinor)
 	}
 
 	if err := h.provisionPlan(ctx, userID, plan); err != nil {
-		fmt.Printf("DEBUG webhook: provisionPlan ERROR userID=%d plan=%s err=%v\n", userID, plan.ID, err)
+		h.log.Errorw("webhook: provisionPlan error", "userID", maskInt(userID), "plan", plan.ID, "error", err)
 		c.JSON(http.StatusOK, gin.H{"ok": true}) // YooKassa will retry
 		return
 	}

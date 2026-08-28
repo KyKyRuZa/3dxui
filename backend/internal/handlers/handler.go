@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/gin-gonic/gin"
+
+	"go.uber.org/zap"
 
 	"github.com/ilyas/vpn-service/backend/internal/auth"
 	"github.com/ilyas/vpn-service/backend/internal/billing"
@@ -18,10 +23,32 @@ type Handler struct {
 	cfg     *config.Config
 	panel   *panel.Client
 	billing *billing.Client
+	log     *zap.SugaredLogger
 }
 
-func NewHandler(s *store.Store, j *auth.TokenService, cfg *config.Config, p *panel.Client, b *billing.Client) *Handler {
-	return &Handler{store: s, jwt: j, cfg: cfg, panel: p, billing: b}
+func NewHandler(s *store.Store, j *auth.TokenService, cfg *config.Config, p *panel.Client, b *billing.Client, log *zap.SugaredLogger) *Handler {
+	return &Handler{store: s, jwt: j, cfg: cfg, panel: p, billing: b, log: log}
+}
+
+func maskInt(v int64) string {
+	if v == 0 {
+		return "0"
+	}
+	return fmt.Sprintf("***%d", v%10000)
+}
+
+func maskStr(s string) string {
+	if s == "" {
+		return ""
+	}
+	// keep domain part only for emails/panel emails
+	if idx := strings.LastIndex(s, "@"); idx > 0 {
+		return "***" + s[idx:]
+	}
+	if len(s) <= 4 {
+		return "***"
+	}
+	return "***" + s[len(s)-4:]
 }
 
 // RegisterRoutes wires all application routes onto the engine.

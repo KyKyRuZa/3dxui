@@ -197,7 +197,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		// Renew a subscription that has no expiry yet or has already expired.
 		if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(time.Now()) {
 			if rerr := h.renewSubscription(ctx, sub); rerr != nil {
-				fmt.Printf("DEBUG activate: renew ERROR userID=%d err=%v\n", userID, rerr)
+				h.log.Errorw("activate: renew error", "userID", maskInt(userID), "error", rerr)
 			}
 		}
 		links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
@@ -242,26 +242,26 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
 	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
-		fmt.Printf("DEBUG activate: creating client in panel email=%s err=%v\n", panelEmail, err)
+		h.log.Debugw("activate: creating client in panel", "email", maskStr(panelEmail), "error", err)
 		addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
 		if err != nil {
-			fmt.Printf("DEBUG activate: AddClient ERROR email=%s err=%v\n", panelEmail, err)
+			h.log.Errorw("activate: AddClient error", "email", maskStr(panelEmail), "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client in panel"})
 			return
 		}
 		if addClientInfo != nil && addClientInfo.SubID != "" {
-			fmt.Printf("DEBUG activate: AddClient OK email=%s subId=%s (from response)\n", panelEmail, addClientInfo.SubID)
+			h.log.Infow("activate: AddClient ok", "email", maskStr(panelEmail), "subId", addClientInfo.SubID)
 		} else {
-			fmt.Printf("DEBUG activate: AddClient OK email=%s\n", panelEmail)
+			h.log.Infow("activate: AddClient ok", "email", maskStr(panelEmail))
 		}
 	}
 
 	if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
-		fmt.Printf("DEBUG activate: AddToGroup ERROR email=%s group=%s err=%v\n", panelEmail, h.cfg.DefaultGroup, err)
+		h.log.Errorw("activate: AddToGroup error", "email", maskStr(panelEmail), "group", h.cfg.DefaultGroup, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add to group"})
 		return
 	}
-	fmt.Printf("DEBUG activate: AddToGroup OK email=%s group=%s\n", panelEmail, h.cfg.DefaultGroup)
+	h.log.Infow("activate: AddToGroup ok", "email", maskStr(panelEmail), "group", h.cfg.DefaultGroup)
 
 	var clientInfo *panel.ClientInfo
 	if addClientInfo != nil && addClientInfo.SubID != "" {
@@ -270,12 +270,12 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		var err error
 		clientInfo, err = h.panel.GetClient(ctx, panelEmail)
 		if err != nil {
-			fmt.Printf("DEBUG activate: GetClient ERROR email=%s err=%v\n", panelEmail, err)
+			h.log.Errorw("activate: GetClient error", "email", maskStr(panelEmail), "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get client info"})
 			return
 		}
 	}
-	fmt.Printf("DEBUG activate: GetClient OK email=%s subId=%s inboundIds=%v\n", panelEmail, clientInfo.SubID, clientInfo.InboundIDs)
+	h.log.Infow("activate: GetClient ok", "email", maskStr(panelEmail), "subId", clientInfo.SubID, "inboundIds", clientInfo.InboundIDs)
 
 	sub = &models.Subscription{
 		UserID:     userID,
@@ -286,11 +286,11 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		ExpiresAt:  sql.NullTime{Time: time.UnixMilli(expiryMs), Valid: true},
 	}
 	if err := h.store.CreateSubscription(ctx, sub); err != nil {
-		fmt.Printf("DEBUG activate: CreateSubscription ERROR userID=%d err=%v\n", userID, err)
+		h.log.Errorw("activate: CreateSubscription error", "userID", maskInt(userID), "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save subscription"})
 		return
 	}
-	fmt.Printf("DEBUG activate: CreateSubscription OK userID=%d subId=%s\n", userID, clientInfo.SubID)
+	h.log.Infow("activate: CreateSubscription ok", "userID", maskInt(userID), "subId", clientInfo.SubID)
 
 	publicURL := h.cfg.PanelPublicURL
 	if publicURL == "" {

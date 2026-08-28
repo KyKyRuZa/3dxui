@@ -49,8 +49,7 @@ func Load() (*Config, error) {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err != nil {
-		// Config file is optional; we rely on environment variables.
-		fmt.Printf("config file not loaded (using env): %v\n", err)
+		_ = err
 	}
 
 	cfg := &Config{
