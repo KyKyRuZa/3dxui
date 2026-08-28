@@ -12,7 +12,7 @@
 
 - Модуль бэкенда: `github.com/ilyas/vpn-service/backend` (исторически такое имя пакета).
 - Git-remote: `github.com/KyKyRuZa/3dxui` (ветка `master`).
-- Статус (на 2026-08-26): **MVP ~85%**, сквозной happy-path рабочий, биллинг ЮKassa подключён (MVP, тестовый магазин).
+- Статус (на 2026-08-28): **MVP ~90%**, сквозной happy-path рабочий (и бот, и веб), биллинг ЮKassa подключён (MVP, тестовый магазин, проверен сквозь веб-дашборд).
 
 ## 2. Архитектура (docker-compose)
 
@@ -55,8 +55,11 @@
 - Бот `send_expiry_notifications` шлёт «осталось ~N дн.» (в последний день — более срочная
   «Последний день подписки!»), а `send_expired_notifications` (ранее НЕ был подключён к циклу)
   теперь тоже вызывается из `notification_loop` и шлёт навязчивую «купите ключ» рассылку
-  ежедневно в течение 7 дней после истечения (`backend_expired(hours=168)`). Дедуп по
-  `last_expired_notify_date` (раз в сутки, переживает рестарт).
+   ежедневно в течение 7 дней после истечения (`backend_expired(hours=168)`). Дедуп по
+   `last_expired_notify_date` (раз в сутки, переживает рестарт).
+- Во все pushy-сообщения (истечение, последний день, `/status`, `callback status`) добавлен
+  **реферальный якорь**: «пригласите друга — получите +7 дней бесплатно» + готовая
+  `t.me/AutoColorsBot?start=<code>` (ссылка подтягивается через `backend_referral`).
 - Фоновый цикл раз в `NOTIFY_INTERVAL` (по умолч. 3600с). Проверено на `tg_699469085`:
   `expires_at` = now+2д, уведомление приходит.
 
@@ -108,6 +111,10 @@
   `provisionPlan` создаёт клиента в 3x-ui → `expires_at` = now+30 дней. Смена на
   боевой магазин — только `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` в `.env` и
   `docker compose up -d --build backend`; код менять не нужно.
+- **Проверено сквозь веб-дашборд (2026-08-27, тестовый магазин `1268375`):** логин →
+  `GET /api/billing/plans` → `POST /api/billing/create` (открывает `confirmation_url`) →
+  webhook от IP ЮKassa `77.75.153.x` (`payment.succeeded`, 200) → `provisionPlan` продлевает
+  подписку; `GET /api/referral` и `GET /api/config` тоже отвечают 200. Путь веб-покупки рабочий.
 - **Фронт знает про тестовый магазин**: бэкенд отдаёт `GET /api/config`
   (`{yookassa_test_mode}`; `true`, если `YOOKASSA_SECRET_KEY` начинается с `test_` или
   `YOOKASSA_TEST_MODE=true`), и `PricingCards` показывает жёлтый бейдж «🧪 Тестовый режим
@@ -174,6 +181,16 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   `email`, `subId`, `expiryTime`, `enable`, `inboundIds`, иначе клиент отвяжется от inbounds / сменится subId.
 - `openapi.json` в корне — это спецификация самой панели 3x-ui, НЕ нашего API.
 - JWT-ключи эфемерны, если не задан `JWT_PRIVATE_KEY` (токены сбросятся при рестарте).
+  **Последствие при деплое:** после каждой пересборки `backend` (`docker compose up -d
+  --build backend`) ключ меняется → все существующие сессии/refresh-токены становятся
+  недействительны (в логах/браузере — шквал 401 на `/api/auth/refresh`, `/api/billing/plans`),
+  пользователям нужно просто перелогиниться. Чтобы сессии переживали рестарты — однократно
+  сгенерировать EC P256 PEM (`openssl ecparam -name prime256v1 -genkey -noout`) и задать
+  `JWT_PRIVATE_KEY` в `.env` + пробросить `JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}` в
+  `backend.environment` compose-файла, затем пересобрать backend.
+- При пересборке только `frontend` **nginx рестартовать не нужно**: nginx раздаёт статику из
+  volume `frontend_dist`, который перезаписывает `frontend`-контейнер при сборке; конфиг
+  nginx (`nginx/conf.d`) в этом изменении не менялся.
 - Миграции в `db.go` написаны как `CREATE TABLE IF NOT EXISTS` + `ALTER ... IF NOT EXISTS`
   (идемпотентны, безопасны для уже созданной БД, включая ослабление старых NOT NULL).
 
