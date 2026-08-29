@@ -8,7 +8,7 @@ import (
 type User struct {
 	ID            int64          `json:"id" db:"id"`
 	Username      string         `json:"username" db:"username"`
-	Email         string         `json:"email" db:"email"`
+	Email         sql.NullString `json:"email" db:"email"`
 	PasswordHash  string         `json:"-" db:"password_hash"`
 	IsActive      bool           `json:"is_active" db:"is_active"`
 	TelegramID    sql.NullInt64  `json:"-" db:"telegram_id"`
@@ -100,7 +100,7 @@ func (u User) Public() PublicProfile {
 	return PublicProfile{
 		ID:        u.ID,
 		Username:  u.Username,
-		Email:     u.Email,
+		Email:     u.Email.String,
 		IsActive:  u.IsActive,
 		CreatedAt: u.CreatedAt,
 	}

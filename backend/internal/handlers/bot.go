@@ -351,7 +351,6 @@ func (h *Handler) botGetUser(c *gin.Context) {
 
 	user, err := h.store.GetUserByTelegramID(c.Request.Context(), telegramID)
 	if err != nil {
-		h.log.Errorw("botGetUser: GetUserByTelegramID error", "telegramID", telegramID, "telegramIDStr", telegramIDStr, "err", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 		return
 	}
