@@ -127,6 +127,16 @@ async def backend_expired(hours: int = 24) -> list[dict]:
     return resp.json().get("users", [])
 
 
+async def backend_renewed() -> list[dict]:
+    resp = await http_client.get(
+        f"{BACKEND_URL}/api/bot/notifications/renewed",
+        headers=api_headers(),
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("users", [])
+
+
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -534,6 +544,38 @@ async def send_expired_notifications() -> int:
     return sent
 
 
+async def send_renewal_notifications() -> int:
+    try:
+        renewed = await backend_renewed()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("failed to fetch renewed users: %s", e)
+        return 0
+
+    sent = 0
+    for item in renewed:
+        tg_id = item.get("telegram_id")
+        expires_at = item.get("expires_at", 0)
+        if not tg_id:
+            continue
+        when = ""
+        if expires_at:
+            dt = datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
+            when = dt.strftime("%d.%m.%Y %H:%M UTC")
+        text = (
+            "✅ <b>Подписка продлена!</b>\n\n"
+            f"Новый срок действия — до <b>{when}</b>. "
+            "Ваш VPN-ключ активен, доступ восстановлен.\n\n"
+            "Если конфиг изменился — нажмите 🔑 Купить ключ VPN, чтобы получить свежие данные."
+        )
+        text += referral_anchor(await referral_link(tg_id))
+        try:
+            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            sent += 1
+        except TelegramBadRequest as e:
+            logger.warning("cannot notify %s: %s", tg_id, e)
+    return sent
+
+
 async def notification_loop() -> None:
     while True:
         await asyncio.sleep(NOTIFY_INTERVAL)
@@ -544,6 +586,9 @@ async def notification_loop() -> None:
             sent_expired = await send_expired_notifications()
             if sent_expired:
                 logger.info("sent %d expired-subscription nudges", sent_expired)
+            sent_renewed = await send_renewal_notifications()
+            if sent_renewed:
+                logger.info("sent %d renewal notifications", sent_renewed)
         except Exception as e:  # noqa: BLE001
             logger.exception("notification loop error: %s", e)
 

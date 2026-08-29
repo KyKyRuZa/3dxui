@@ -118,6 +118,16 @@ CREATE TABLE IF NOT EXISTS payments (
 
 CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+
+CREATE TABLE IF NOT EXISTS renewal_notifications (
+	id          BIGSERIAL PRIMARY KEY,
+	user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	telegram_id BIGINT NOT NULL,
+	expires_at  TIMESTAMPTZ NOT NULL,
+	created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	notified_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_renewal_notifications_pending ON renewal_notifications(user_id) WHERE notified_at IS NULL;
 `
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)

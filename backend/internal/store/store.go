@@ -454,3 +454,48 @@ UPDATE payments SET
 WHERE id = $1`, id, status, amountMinor, currency)
 	return err
 }
+
+// CreateRenewalNotification enqueues a bot notification about a renewed
+// subscription. Idempotent by user_id+expires_at to avoid duplicates on
+// webhook retries.
+func (s *Store) CreateRenewalNotification(ctx context.Context, userID, telegramID int64, expiresAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO renewal_notifications (user_id, telegram_id, expires_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, expires_at) DO NOTHING`,
+		userID, telegramID, expiresAt)
+	return err
+}
+
+// GetPendingRenewalNotifications returns renewal notifications that have not
+// been delivered yet, ordered by creation time.
+func (s *Store) GetPendingRenewalNotifications(ctx context.Context) ([]models.RenewalNotification, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, user_id, telegram_id, expires_at, created_at, notified_at
+FROM renewal_notifications
+WHERE notified_at IS NULL
+ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.RenewalNotification, 0)
+	for rows.Next() {
+		var n models.RenewalNotification
+		if err := rows.Scan(&n.ID, &n.UserID, &n.TelegramID, &n.ExpiresAt, &n.CreatedAt, &n.NotifiedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// MarkRenewalNotified marks notifications as delivered.
+func (s *Store) MarkRenewalNotified(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+UPDATE renewal_notifications SET notified_at = NOW() WHERE id = ANY($1)`, pq.Array(ids))
+	return err
+}

@@ -451,3 +451,32 @@ func (h *Handler) botExpired(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }
+
+// botRenewed returns recently renewed subscriptions that have not been
+// notified about the renewal yet, marking them as notified.
+func (h *Handler) botRenewed(c *gin.Context) {
+	ctx := c.Request.Context()
+	items, err := h.store.GetPendingRenewalNotifications(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	ids := make([]int64, 0, len(items))
+	users := make([]gin.H, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+		users = append(users, gin.H{
+			"telegram_id": it.TelegramID,
+			"expires_at":  it.ExpiresAt.UnixMilli(),
+		})
+	}
+
+	if len(ids) > 0 {
+		if err := h.store.MarkRenewalNotified(ctx, ids); err != nil {
+			h.log.Errorw("botRenewed: mark notified error", "error", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"users": users})
+}

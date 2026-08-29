@@ -256,6 +256,9 @@ func (h *Handler) provisionPlan(ctx context.Context, userID int64, plan *models.
 		if cerr := h.store.CreateSubscription(ctx, newSub); cerr != nil {
 			return fmt.Errorf("CreateSubscription: %w", cerr)
 		}
+		if user.TelegramID.Valid && user.TelegramID.Int64 != 0 {
+			_ = h.store.CreateRenewalNotification(ctx, user.ID, user.TelegramID.Int64, time.UnixMilli(expiryMs))
+		}
 		return nil
 	}
 	if err != nil {
@@ -279,6 +282,9 @@ func (h *Handler) provisionPlan(ctx context.Context, userID int64, plan *models.
 	}
 	if uerr := h.store.UpdateSubscriptionExpiry(ctx, sub.ID, newExpiry); uerr != nil {
 		return fmt.Errorf("UpdateSubscriptionExpiry: %w", uerr)
+	}
+	if user.TelegramID.Valid && user.TelegramID.Int64 != 0 {
+		_ = h.store.CreateRenewalNotification(ctx, user.ID, user.TelegramID.Int64, newExpiry)
 	}
 	return nil
 }

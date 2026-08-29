@@ -86,6 +86,16 @@ type PaymentRow struct {
 	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
 }
 
+// RenewalNotification is a pending bot notification about a subscription renewal.
+type RenewalNotification struct {
+	ID          int64     `db:"id" json:"id"`
+	UserID      int64     `db:"user_id" json:"user_id"`
+	TelegramID  int64     `db:"telegram_id" json:"telegram_id"`
+	ExpiresAt   time.Time `db:"expires_at" json:"expires_at"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	NotifiedAt  sql.NullTime `db:"notified_at" json:"notified_at"`
+}
+
 func (u User) Public() PublicProfile {
 	return PublicProfile{
 		ID:        u.ID,

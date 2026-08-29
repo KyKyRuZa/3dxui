@@ -82,6 +82,10 @@
   (раньше `/api/bot/*` падал с 404/401).
 - Коллизия `email` UNIQUE устранена: колонка стала nullable + частичный индекс
   `idx_users_email` (уникальность только для непустых); `CreateUser` пишет `NULL`.
+- **Очистка логов**: последний `fmt.Println` в `internal/auth/jwt.go` заменён на
+  `zap.SugaredLogger.Warn`; `NewTokenService` теперь принимает логгер из `cmd/main.go`.
+  В бэкенде больше нет `fmt.Print*`; `log.Fatalf` в `main.go` остаются только на
+  раннем старте до инициализации zap и не содержат ПДн.
 
 ### 3.5 Биллинг ЮKassa — РАБОТАЕТ (MVP, тестовый магазин)
 - Клиент ЮKassa: `internal/billing/yookassa.go` (`CreatePayment`, `GetPayment`, Basic-auth,
@@ -103,6 +107,9 @@
 - На успехе: `provisionPlan` создаёт/продлевает клиента в 3x-ui на `plan.DurationDays`
   (аналог `renewSubscription`, но по длительности плана) → вызывается
   `CreditReferralReward(referredUserID)` (теперь НЕ dead code).
+- **Уведомления бота о продлении через сайт**: после успешного `provisionPlan` создаётся
+  запись в `renewal_notifications`; бот polling'ит `GET /api/bot/notifications/renewed`
+  и шлёт push «✅ Подписка продлена!». Дедуп по `notified_at`.
 - ВАЖНО: webhook-URL (`https://thenomoreblocks.com/api/billing/webhook`) должен быть
   указан в профиле магазина ЮKassa и быть публично доступен по HTTPS. Для локальной
   отладки — ngrok/туннель.
@@ -127,10 +134,7 @@
    `YOOKASSA_SECRET_KEY` на боевой и проверить реальное списание.
 2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
    но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
-3. **Чистка DEBUG-логов**: `fmt.Printf("DEBUG ...")` заменены на zap (`Debugw`/`Infow`/`Errorw`) с
-   маскированием ПДн (userID/email/telegram_id/payment_id) для соответствия 152-ФЗ. Остаётся
-   одно `fmt.Println` в `auth/jwt.go` (стартовое предупреждение про `JWT_PRIVATE_KEY`, без ПДн).
-4. **Админ-панель / управление планами** — опционально.
+3. **Админ-панель / управление планами** — опционально.
 7. **Обход DNS-блокировки сайта покупателями**: добавлена команда `/fix` и кнопка
    «🔧 Починить доступ к сайту» в боте. Бот спрашивает ОС и отправляет готовые скрипты
    `add_hosts_windows.bat` и `add_hosts_linux_macos.sh`, которые прописывают

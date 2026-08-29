@@ -87,6 +87,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bot.GET("/user/:telegram_id", h.botGetUser)
 			bot.GET("/notifications/expiring", h.botExpiring)
 			bot.GET("/notifications/expired", h.botExpired)
+			bot.GET("/notifications/renewed", h.botRenewed)
 			bot.POST("/referral", h.botReferral)
 		}
 
