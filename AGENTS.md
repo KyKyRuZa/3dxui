@@ -82,6 +82,17 @@
   (раньше `/api/bot/*` падал с 404/401).
 - Коллизия `email` UNIQUE устранена: колонка стала nullable + частичный индекс
   `idx_users_email` (уникальность только для непустых); `CreateUser` пишет `NULL`.
+- **БАГ (исправлен 2026-08-29):** `models.User.Email` был `string`, а в БД `email` —
+  NULL у бот-пользователей. `lib/pq` падал на `Scan` (`converting NULL to string is
+  unsupported`), из-за чего `GetUserByTelegramID`/`scanUser` возвращали ошибку, а
+  `botGetUser`/`botReferral` отдавали 404 и бот «не обновлялся». Исправлено:
+  `User.Email` → `sql.NullString`, `Public().Email` берёт `.String`. Аналогично уже
+  были nullable-safe `panel_username`/`panel_uuid`/`referral_code`.
+- **Уведомления бота о продлении через сайт (добавлено 2026-08-29):** таблица
+  `renewal_notifications` (user_id, telegram_id, expires_at, notified_at); после
+  успешного `provisionPlan` (webhook ЮKassa) пишется запись; бот poll'ит
+  `GET /api/bot/notifications/renewed` и шлёт «✅ Подписка продлена!». Дедуп по
+  `notified_at`. Эндпоинт защищён `BotRequired`.
 - **Очистка логов**: последний `fmt.Println` в `internal/auth/jwt.go` заменён на
   `zap.SugaredLogger.Warn`; `NewTokenService` теперь принимает логгер из `cmd/main.go`.
   В бэкенде больше нет `fmt.Print*`; `log.Fatalf` в `main.go` остаются только на
