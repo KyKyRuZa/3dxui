@@ -45,7 +45,7 @@ func main() {
 	}
 	defer redisClient.Close()
 
-	jwtSvc, err := auth.NewTokenService(cfg)
+	jwtSvc, err := auth.NewTokenService(cfg, sugar)
 	if err != nil {
 		sugar.Fatalf("Failed to init token service: %v", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/ilyas/vpn-service/backend/internal/config"
+	"go.uber.org/zap"
 )
 
 const (
@@ -34,7 +35,7 @@ type TokenService struct {
 }
 
 // NewTokenService loads (or generates) the EC P-256 key used for signing.
-func NewTokenService(cfg *config.Config) (*TokenService, error) {
+func NewTokenService(cfg *config.Config, log *zap.SugaredLogger) (*TokenService, error) {
 	if pem := os.Getenv("JWT_PRIVATE_KEY"); pem != "" {
 		key, err := parsePEM(pem)
 		if err != nil {
@@ -47,7 +48,7 @@ func NewTokenService(cfg *config.Config) (*TokenService, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("[warn] JWT_PRIVATE_KEY not set: generated ephemeral EC key; refresh tokens will not survive restarts")
+	log.Warn("JWT_PRIVATE_KEY not set: generated ephemeral EC key; refresh tokens will not survive restarts")
 	return &TokenService{priv: key, pub: &key.PublicKey}, nil
 }
 
