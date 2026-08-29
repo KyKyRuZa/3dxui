@@ -12,7 +12,9 @@
 
 - Модуль бэкенда: `github.com/ilyas/vpn-service/backend` (исторически такое имя пакета).
 - Git-remote: `github.com/KyKyRuZa/3dxui` (ветка `master`).
-- Статус (на 2026-08-28): **MVP ~95%**, сквозной happy-path рабочий (бот + веб + биллинг + рефералы + уведомления). Деплой на сервер проверён; остаётся переход на боевой магазин ЮKassa и опциональная админка.
+- Статус (на 2026-08-29): бот снова стабильно видит пользователей и подписки, добавлен
+  механизм уведомлений бота о продлении через сайт. Остаётся тестовый запуск оплаты в
+  тестовом магазине ЮKassa и CRUD тарифов.
 
 ## 2. Архитектура (docker-compose)
 
@@ -118,9 +120,6 @@
 - На успехе: `provisionPlan` создаёт/продлевает клиента в 3x-ui на `plan.DurationDays`
   (аналог `renewSubscription`, но по длительности плана) → вызывается
   `CreditReferralReward(referredUserID)` (теперь НЕ dead code).
-- **Уведомления бота о продлении через сайт**: после успешного `provisionPlan` создаётся
-  запись в `renewal_notifications`; бот polling'ит `GET /api/bot/notifications/renewed`
-  и шлёт push «✅ Подписка продлена!». Дедуп по `notified_at`.
 - ВАЖНО: webhook-URL (`https://thenomoreblocks.com/api/billing/webhook`) должен быть
   указан в профиле магазина ЮKassa и быть публично доступен по HTTPS. Для локальной
   отладки — ngrok/туннель.
