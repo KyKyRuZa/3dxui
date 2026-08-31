@@ -128,6 +128,22 @@ CREATE TABLE IF NOT EXISTS renewal_notifications (
 	notified_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_renewal_notifications_pending ON renewal_notifications(user_id) WHERE notified_at IS NULL;
+
+-- Generic bot notifications queue. Any backend event that should reach a user
+-- via Telegram enqueues a row here; the bot polls pending rows and renders a
+-- message by its kind. ref_key makes enqueue idempotent per (kind, event) so
+-- webhook retries never produce duplicate pushes.
+CREATE TABLE IF NOT EXISTS bot_notifications (
+	id           BIGSERIAL PRIMARY KEY,
+	telegram_id  BIGINT NOT NULL,
+	kind         TEXT NOT NULL,
+	data         JSONB NOT NULL DEFAULT '{}'::jsonb,
+	ref_key      TEXT NOT NULL,
+	created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	notified_at  TIMESTAMPTZ,
+	UNIQUE (kind, ref_key)
+);
+CREATE INDEX IF NOT EXISTS idx_bot_notifications_pending ON bot_notifications (created_at) WHERE notified_at IS NULL;
 `
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)

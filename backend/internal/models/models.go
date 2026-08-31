@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -51,16 +52,16 @@ type PublicProfile struct {
 }
 
 type Subscription struct {
-	ID                   int64          `json:"id" db:"id"`
-	UserID               int64          `json:"user_id" db:"user_id"`
-	Status               string         `json:"status" db:"status"`
-	PanelEmail           string         `json:"panel_email" db:"panel_email"`
-	PanelSubID           sql.NullString `json:"panel_sub_id" db:"panel_sub_id"`
-	GroupName            string         `json:"group_name" db:"group_name"`
-	CreatedAt            time.Time      `json:"created_at" db:"created_at"`
-	ExpiresAt            sql.NullTime   `json:"expires_at" db:"expires_at"`
-	LastExpiryNotifyDate sql.NullTime   `json:"-" db:"last_expiry_notify_date"`
-	LastExpiredNotifyDate sql.NullTime  `json:"-" db:"last_expired_notify_date"`
+	ID                    int64          `json:"id" db:"id"`
+	UserID                int64          `json:"user_id" db:"user_id"`
+	Status                string         `json:"status" db:"status"`
+	PanelEmail            string         `json:"panel_email" db:"panel_email"`
+	PanelSubID            sql.NullString `json:"panel_sub_id" db:"panel_sub_id"`
+	GroupName             string         `json:"group_name" db:"group_name"`
+	CreatedAt             time.Time      `json:"created_at" db:"created_at"`
+	ExpiresAt             sql.NullTime   `json:"expires_at" db:"expires_at"`
+	LastExpiryNotifyDate  sql.NullTime   `json:"-" db:"last_expiry_notify_date"`
+	LastExpiredNotifyDate sql.NullTime   `json:"-" db:"last_expired_notify_date"`
 }
 
 // Plan describes a purchasable VPN subscription tier. Price is stored in the
@@ -88,12 +89,26 @@ type PaymentRow struct {
 
 // RenewalNotification is a pending bot notification about a subscription renewal.
 type RenewalNotification struct {
-	ID          int64     `db:"id" json:"id"`
-	UserID      int64     `db:"user_id" json:"user_id"`
-	TelegramID  int64     `db:"telegram_id" json:"telegram_id"`
-	ExpiresAt   time.Time `db:"expires_at" json:"expires_at"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
-	NotifiedAt  sql.NullTime `db:"notified_at" json:"notified_at"`
+	ID         int64        `db:"id" json:"id"`
+	UserID     int64        `db:"user_id" json:"user_id"`
+	TelegramID int64        `db:"telegram_id" json:"telegram_id"`
+	ExpiresAt  time.Time    `db:"expires_at" json:"expires_at"`
+	CreatedAt  time.Time    `db:"created_at" json:"created_at"`
+	NotifiedAt sql.NullTime `db:"notified_at" json:"notified_at"`
+}
+
+// BotNotification is a generic pending Telegram push produced by backend events
+// (referral signup/reward, payment failures, etc.). `kind` selects the message
+// template in the bot; `data` carries template variables. `ref_key` provides
+// idempotency so the same event is never queued twice.
+type BotNotification struct {
+	ID         int64           `db:"id" json:"id"`
+	TelegramID int64           `db:"telegram_id" json:"telegram_id"`
+	Kind       string          `db:"kind" json:"kind"`
+	Data       json.RawMessage `db:"data" json:"data"`
+	RefKey     string          `db:"ref_key" json:"ref_key"`
+	CreatedAt  time.Time       `db:"created_at" json:"created_at"`
+	NotifiedAt sql.NullTime    `db:"notified_at" json:"notified_at"`
 }
 
 func (u User) Public() PublicProfile {

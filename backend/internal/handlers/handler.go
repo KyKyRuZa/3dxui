@@ -88,6 +88,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bot.GET("/notifications/expiring", h.botExpiring)
 			bot.GET("/notifications/expired", h.botExpired)
 			bot.GET("/notifications/renewed", h.botRenewed)
+			bot.GET("/notifications/pending", h.botNotifications)
 			bot.POST("/referral", h.botReferral)
 		}
 

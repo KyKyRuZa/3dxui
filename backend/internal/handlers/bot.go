@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,8 +23,8 @@ import (
 
 func (h *Handler) botEnsureUser(c *gin.Context) {
 	var body struct {
-		TelegramID  int64  `json:"telegram_id"`
-		FirstName   string `json:"first_name"`
+		TelegramID   int64  `json:"telegram_id"`
+		FirstName    string `json:"first_name"`
 		ReferralCode string `json:"referral_code"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.TelegramID == 0 {
@@ -145,6 +146,17 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			if _, gerr := h.store.GetReferral(ctx, referrer.ID, user.ID); errors.Is(gerr, store.ErrNotFound) {
 				if cerr := h.store.CreateReferral(ctx, referrer.ID, user.ID, h.cfg.ReferralRewardDays); cerr == nil {
 					h.applyReferralSignupBonus(ctx, sub)
+					// Notify the referrer that a friend joined via their link.
+					if referrer.TelegramID.Valid && referrer.TelegramID.Int64 != 0 {
+						if payload, jerr := json.Marshal(map[string]any{
+							"referred_id": user.ID,
+							"friend_name": body.FirstName,
+							"reward_days": h.cfg.ReferralRewardDays,
+						}); jerr == nil {
+							_ = h.store.CreateBotNotification(ctx, referrer.TelegramID.Int64, "referral_signup",
+								fmt.Sprintf("signup:%d:%d", referrer.ID, user.ID), payload)
+						}
+					}
 				}
 			}
 		}
@@ -291,6 +303,16 @@ func (h *Handler) CreditReferralReward(ctx context.Context, referredUserID int64
 	if err := h.store.CompleteReferral(ctx, ref.ReferrerID, ref.ReferredID, days); err != nil {
 		h.log.Errorw("CreditReferralReward: CompleteReferral error", "error", err)
 		return
+	}
+	// Notify the referrer that the bonus was credited.
+	if referrer, rerr := h.store.GetUserByID(ctx, ref.ReferrerID); rerr == nil && referrer.TelegramID.Valid && referrer.TelegramID.Int64 != 0 {
+		if payload, jerr := json.Marshal(map[string]any{
+			"referred_id": ref.ReferredID,
+			"reward_days": days,
+		}); jerr == nil {
+			_ = h.store.CreateBotNotification(ctx, referrer.TelegramID.Int64, "referral_reward",
+				fmt.Sprintf("reward:%d:%d", ref.ReferrerID, ref.ReferredID), payload)
+		}
 	}
 	h.log.Infow("CreditReferralReward: rewarded", "referrer", maskInt(ref.ReferrerID), "days", days)
 }
@@ -483,4 +505,36 @@ func (h *Handler) botRenewed(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"users": users})
+}
+
+// botNotifications returns generic pending bot notifications (referral
+// signups/rewards, payment failures, etc.) and marks them as delivered so the
+// loop does not re-send the same event.
+func (h *Handler) botNotifications(c *gin.Context) {
+	ctx := c.Request.Context()
+	items, err := h.store.GetPendingBotNotifications(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	ids := make([]int64, 0, len(items))
+	notifs := make([]gin.H, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.ID)
+		notifs = append(notifs, gin.H{
+			"id":          it.ID,
+			"telegram_id": it.TelegramID,
+			"kind":        it.Kind,
+			"data":        it.Data,
+		})
+	}
+
+	if len(ids) > 0 {
+		if err := h.store.MarkBotNotificationsNotified(ctx, ids); err != nil {
+			h.log.Errorw("botNotifications: mark notified error", "error", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"notifications": notifs})
 }

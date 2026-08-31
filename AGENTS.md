@@ -203,6 +203,37 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 `https://t.me/AutoColorsBot?start=<code>` → `/buy` → новому юзеру +2 дня, у реферера
 счётчик «Приглашено» +1. Вознаграждение рефереру (+7 дней) — только после платежа.
 
+### 3.6 Уведомления бота — ВСЕ сценарии (актуально 2026-08-31)
+
+Бот должен оповещать пользователя обо всех значимых событиях в связке бот↔сайт↔БД.
+Реализовано два механизма:
+
+1. **Опрос подписок** (поллинг из `notification_loop`, `NOTIFY_INTERVAL` по умолч. 3600с):
+   - `GET /api/bot/notifications/expiring` → «🔔 Подписка скоро истечёт» (`send_expiry_notifications`).
+   - `GET /api/bot/notifications/expired` → «🚨 Доступ перекрыт» (`send_expired_notifications`, окно 168ч).
+   - `GET /api/bot/notifications/renewed` → «✅ Подписка продлена!» (`send_renewal_notifications`,
+     пишется из `provisionPlan` через `renewal_notifications`).
+
+2. **Универсальная очередь `bot_notifications`** (новое, 2026-08-31): таблица
+   `(telegram_id, kind, data JSONB, ref_key UNIQUE(kind,ref_key), notified_at)`. Любое
+   бэкенд-событие кладёт строку; бот опрашивает `GET /api/bot/notifications/pending`
+   (`botNotifications` → `send_bot_notifications`), рендерит текст по `kind` и помечает
+   доставленным. Идемпотентность по `ref_key` → повторы вебхука не шлют дубль.
+   Покрытые `kind`:
+   - `referral_signup` — рефереру: «друг зарегистрировался по вашей ссылке» (пишется в
+     `botEnsureUser` при создании `referrals` pending; `ref_key=signup:<referrer>:<referred>`).
+   - `referral_reward` — рефереру: «вам начислено +N дней» (пишется в `CreditReferralReward`
+     после `CompleteReferral`; `ref_key=reward:<referrer>:<referred>`).
+   - `payment_failed` — юзеру: «оплата не прошла» (пишется в `billingWebhook` на
+     `payment.canceled`; `ref_key=payfail:<payment_id>`).
+
+**Интерактивные ответы** (не рассылка, бот отвечает прямо в чате): выдача ключа (`/buy`),
+статус (`/status`), реф-ссылка (`/referral`), инструкция/починка доступа (`/fix`, `/instructions`).
+Их в очередь НЕ кладём — пользователь уже в диалоге.
+
+Добавить новый сценарий = положить строку в `bot_notifications` + добавить ветку в
+`render_bot_notification` (`bot/main.py`); эндпоинт и цикл уже всё разберут.
+
 ## 6. Подводные камни (gotchas)
 
 - Бэкенд в compose не проброшен на хост; curl-тесты делать изнутри сети (`docker compose exec backend`)

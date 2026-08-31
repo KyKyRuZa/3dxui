@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -112,6 +113,18 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 	// Cancellations: record and stop. Nothing to provision.
 	if payload.Event == "payment.canceled" {
 		_ = h.store.UpdatePaymentStatus(ctx, payload.Object.ID, "canceled")
+		// Notify the user that their payment failed so they can retry.
+		if p, perr := h.store.GetPayment(ctx, payload.Object.ID); perr == nil {
+			if u, uerr := h.store.GetUserByID(ctx, p.UserID); uerr == nil && u.TelegramID.Valid && u.TelegramID.Int64 != 0 {
+				if payload2, jerr := json.Marshal(map[string]any{
+					"plan_id":      p.PlanID,
+					"amount_minor": p.AmountMinor,
+				}); jerr == nil {
+					_ = h.store.CreateBotNotification(ctx, u.TelegramID.Int64, "payment_failed",
+						fmt.Sprintf("payfail:%s", payload.Object.ID), payload2)
+				}
+			}
+		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}

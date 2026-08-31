@@ -137,6 +137,16 @@ async def backend_renewed() -> list[dict]:
     return resp.json().get("users", [])
 
 
+async def backend_notifications() -> list[dict]:
+    resp = await http_client.get(
+        f"{BACKEND_URL}/api/bot/notifications/pending",
+        headers=api_headers(),
+        timeout=30,
+    )
+    resp.raise_for_status()
+    return resp.json().get("notifications", [])
+
+
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -576,6 +586,57 @@ async def send_renewal_notifications() -> int:
     return sent
 
 
+def render_bot_notification(kind: str, data: dict) -> str | None:
+    """Build the message text for a generic bot notification by its kind."""
+    if kind == "referral_signup":
+        name = (data.get("friend_name") or "").strip()
+        who = f" <b>{name}</b>" if name else ""
+        return (
+            "🤝 <b>По вашей реферальной ссылке зарегистрировался друг{who}!</b>\n\n"
+            "Когда он купит платный тариф, вы получите <b>+7 дней</b> к подписке бесплатно. "
+            "Делитесь ссылкой дальше и приглашайте ещё больше друзей!"
+        ).format(who=who)
+    if kind == "referral_reward":
+        days = data.get("reward_days") or 7
+        return (
+            f"🎁 <b>Вам начислено +{days} дней!</b>\n\n"
+            "Друг купил тариф по вашей ссылке — бонус зачислен, ваша подписка продлена. "
+            "Спасибо, что приводите друзей! 🚀"
+        )
+    if kind == "payment_failed":
+        return (
+            "❌ <b>Оплата не прошла</b>\n\n"
+            "К сожалению, платёж за тариф не был завершён (отменён или отклонён). "
+            "Попробуйте оплатить ещё раз через 🔑 Купить ключ VPN — и доступ откроется сразу."
+        )
+    return None
+
+
+async def send_bot_notifications() -> int:
+    try:
+        notifs = await backend_notifications()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("failed to fetch bot notifications: %s", e)
+        return 0
+
+    sent = 0
+    for item in notifs:
+        tg_id = item.get("telegram_id")
+        kind = item.get("kind")
+        data = item.get("data") or {}
+        if not tg_id or not kind:
+            continue
+        text = render_bot_notification(kind, data)
+        if not text:
+            continue
+        try:
+            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            sent += 1
+        except TelegramBadRequest as e:
+            logger.warning("cannot notify %s: %s", tg_id, e)
+    return sent
+
+
 async def notification_loop() -> None:
     while True:
         await asyncio.sleep(NOTIFY_INTERVAL)
@@ -589,6 +650,9 @@ async def notification_loop() -> None:
             sent_renewed = await send_renewal_notifications()
             if sent_renewed:
                 logger.info("sent %d renewal notifications", sent_renewed)
+            sent_bot = await send_bot_notifications()
+            if sent_bot:
+                logger.info("sent %d bot notifications", sent_bot)
         except Exception as e:  # noqa: BLE001
             logger.exception("notification loop error: %s", e)
 

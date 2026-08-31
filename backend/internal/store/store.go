@@ -517,3 +517,48 @@ func (s *Store) MarkRenewalNotified(ctx context.Context, ids []int64) error {
 UPDATE renewal_notifications SET notified_at = NOW() WHERE id = ANY($1)`, pq.Array(ids))
 	return err
 }
+
+// CreateBotNotification enqueues a generic Telegram push for a user. Idempotent
+// per (kind, ref_key) so retried backend events never queue duplicates. `data`
+// is the raw JSON payload rendered by the bot for the given `kind`.
+func (s *Store) CreateBotNotification(ctx context.Context, telegramID int64, kind, refKey string, data []byte) error {
+	if len(data) == 0 {
+		data = []byte("{}")
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO bot_notifications (telegram_id, kind, ref_key, data)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (kind, ref_key) DO NOTHING`, telegramID, kind, refKey, data)
+	return err
+}
+
+// GetPendingBotNotifications returns generic bot notifications that have not
+// been delivered yet, ordered by creation time.
+func (s *Store) GetPendingBotNotifications(ctx context.Context) ([]models.BotNotification, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, telegram_id, kind, data, ref_key, created_at, notified_at
+FROM bot_notifications WHERE notified_at IS NULL ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.BotNotification, 0)
+	for rows.Next() {
+		var n models.BotNotification
+		if err := rows.Scan(&n.ID, &n.TelegramID, &n.Kind, &n.Data, &n.RefKey, &n.CreatedAt, &n.NotifiedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// MarkBotNotificationsNotified marks generic bot notifications as delivered.
+func (s *Store) MarkBotNotificationsNotified(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+UPDATE bot_notifications SET notified_at = NOW() WHERE id = ANY($1)`, pq.Array(ids))
+	return err
+}
