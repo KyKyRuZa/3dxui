@@ -538,3 +538,26 @@ func (h *Handler) botNotifications(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"notifications": notifs})
 }
+
+// botClaimLoginToken binds a Telegram user to a pending login token. Called by
+// the bot when a user opens a /start <token> deep link, so the website can
+// complete the browser login.
+func (h *Handler) botClaimLoginToken(c *gin.Context) {
+	var body struct {
+		Token      string `json:"token"`
+		TelegramID int64  `json:"telegram_id"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Token == "" || body.TelegramID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if _, err := h.store.ClaimLoginToken(c.Request.Context(), body.Token, body.TelegramID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "invalid or expired token"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}

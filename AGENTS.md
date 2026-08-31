@@ -248,14 +248,14 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   глубокую ссылку на бота (`https://t.me/<bot_username>`, `bot_username` из `GET /api/config`).
 - Логин вне Telegram невозможен: пользователь должен открыть Mini App из бота
   (`Открыть WebApp` в `bot/main.py` → `WEB_APP_URL`).
-- **Telegram Login Widget** (браузер): на `/login` и `/register` рендерится кнопка
-  виджета Telegram (`telegram.org/js/telegram-widget.js`). После авторизации Telegram
-  вызывает `window.onTelegramAuth(user)` → фронт постит данные на
-  `POST /api/auth/telegram/widget`, бэкенд верифицирует `hash` (HMAC-SHA256 от
-  `SHA256(botToken)`) и создаёт/привязывает аккаунт. Требует:
-  - домен `thenomoreblocks.com` привязан к боту через @BotFather (`/setdomain`)
-  - CSP nginx разрешает `script-src https://telegram.org` и `frame-src https://telegram.org`
-    (добавлено в `nginx/conf.d/default.conf`).
+- **Telegram Login через deep-link (браузер):** на `/login` и `/register`
+  кнопка «Войти через Telegram». Фронт запрашивает `POST /api/auth/telegram/link`
+  → получает `token` + `login_url` (`https://t.me/<bot>?start=<token>`) → открывает
+  бота. Бот в `cmd_start` вызывает `POST /api/bot/login-token/claim`, связывая токен с
+  Telegram-юзером. Фронт опрашивает `GET /api/auth/telegram/link/<token>` и после
+  подтверждения получает `access_token` → редижектит в `/dashboard`. Токены живут
+  5 минут, таблица `telegram_login_tokens`. Реферальные коды (короткие, < 16 символов)
+  по-прежнему запоминаются в `pending_refs` и применяются при `/buy`.
 
 ## 6. Подводные камни (gotchas)
 

@@ -55,7 +55,18 @@ async def backend_ensure_user(telegram_id: int, first_name: str | None = None, r
     return resp.json()
 
 
-async def backend_referral(telegram_id: int) -> dict | None:
+async def backend_claim_login_token(token: str, telegram_id: int) -> bool:
+    """Claim a browser login token for this Telegram user. Returns True on success."""
+    try:
+        resp = await http_client.post(
+            f"{BACKEND_URL}/api/bot/login-token/claim",
+            headers=api_headers(),
+            json={"token": token, "telegram_id": telegram_id},
+            timeout=30,
+        )
+        return resp.status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
     resp = await http_client.post(
         f"{BACKEND_URL}/api/bot/referral",
         headers=api_headers(),
@@ -278,7 +289,17 @@ async def deliver_key(message: types.Message, telegram_id: int, first_name: str 
 async def cmd_start(message: types.Message) -> None:
     parts = message.text.split(maxsplit=1)
     if len(parts) > 1 and parts[1].strip():
-        pending_refs[message.from_user.id] = parts[1].strip()
+        param = parts[1].strip()
+        # A 32-char token is a browser login deep link; claim it for this user.
+        if len(param) >= 16 and await backend_claim_login_token(param, message.from_user.id):
+            await message.answer(
+                "✅ <b>Вход подтверждён!</b>\n\n"
+                "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
+                reply_markup=main_menu_keyboard(),
+            )
+            return
+        # Otherwise treat the parameter as a referral code (captured on /buy).
+        pending_refs[message.from_user.id] = param
     await message.answer(
         "<b>Добро пожаловать в NoMoreBlocks VPN! 🛡️</b>\n\n"
         "Я выдаю и доставляю ваши VPN-ключи прямо сюда в Telegram.\n"

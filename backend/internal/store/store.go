@@ -562,3 +562,59 @@ func (s *Store) MarkBotNotificationsNotified(ctx context.Context, ids []int64) e
 UPDATE bot_notifications SET notified_at = NOW() WHERE id = ANY($1)`, pq.Array(ids))
 	return err
 }
+
+// TelegramLoginToken tracks a browser-initiated login request that the user
+// completes inside the Telegram bot.
+
+type TelegramLoginToken struct {
+	Token      string
+	TelegramID sql.NullInt64
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	ClaimedAt  sql.NullTime
+}
+
+// CreateLoginToken issues a single-use token the user opens via the bot.
+func (s *Store) CreateLoginToken(ctx context.Context, token string, expiresAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO telegram_login_tokens (token, expires_at) VALUES ($1, $2)
+ON CONFLICT (token) DO NOTHING`, token, expiresAt)
+	return err
+}
+
+// ClaimLoginToken binds a Telegram user to an unclaimed, unexpired token.
+// Returns ErrNotFound if the token is missing, expired, or already claimed.
+func (s *Store) ClaimLoginToken(ctx context.Context, token string, telegramID int64) (*TelegramLoginToken, error) {
+	var t TelegramLoginToken
+	err := s.db.QueryRowContext(ctx, `
+UPDATE telegram_login_tokens
+   SET telegram_id = $2, claimed_at = NOW()
+ WHERE token = $1
+   AND telegram_id IS NULL
+   AND expires_at > NOW()
+RETURNING token, telegram_id, created_at, expires_at, claimed_at`,
+		token, telegramID).Scan(&t.Token, &t.TelegramID, &t.CreatedAt, &t.ExpiresAt, &t.ClaimedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// GetLoginToken returns the current state of a token (claimed or not).
+func (s *Store) GetLoginToken(ctx context.Context, token string) (*TelegramLoginToken, error) {
+	var t TelegramLoginToken
+	err := s.db.QueryRowContext(ctx, `
+SELECT token, telegram_id, created_at, expires_at, claimed_at
+FROM telegram_login_tokens WHERE token = $1`, token).
+		Scan(&t.Token, &t.TelegramID, &t.CreatedAt, &t.ExpiresAt, &t.ClaimedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}

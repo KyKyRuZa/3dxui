@@ -144,6 +144,18 @@ CREATE TABLE IF NOT EXISTS bot_notifications (
 	UNIQUE (kind, ref_key)
 );
 CREATE INDEX IF NOT EXISTS idx_bot_notifications_pending ON bot_notifications (created_at) WHERE notified_at IS NULL;
+
+-- Telegram login tokens for the browser deep-link flow. A user on the website
+-- requests a token, opens the bot with /start <token>, the bot reports the
+-- user's Telegram id back, and the website polls until the token is claimed.
+CREATE TABLE IF NOT EXISTS telegram_login_tokens (
+	token       TEXT PRIMARY KEY,
+	telegram_id BIGINT,
+	created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	expires_at  TIMESTAMPTZ NOT NULL,
+	claimed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_telegram_login_tokens_expire ON telegram_login_tokens (expires_at);
 `
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)

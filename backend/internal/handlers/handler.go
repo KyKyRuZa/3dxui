@@ -63,6 +63,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		{
 			auth.POST("/telegram", h.telegram)
 			auth.POST("/telegram/widget", h.telegramWidget)
+			auth.POST("/telegram/link", h.telegramLink)
+			auth.GET("/telegram/link/:token", h.telegramLinkCheck)
 			auth.POST("/refresh", h.refresh)
 			auth.POST("/logout", h.logout)
 			auth.GET("/profile", middleware.AuthRequired(h.jwt), h.profile)
@@ -87,6 +89,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			bot.GET("/notifications/renewed", h.botRenewed)
 			bot.GET("/notifications/pending", h.botNotifications)
 			bot.POST("/referral", h.botReferral)
+			bot.POST("/login-token/claim", h.botClaimLoginToken)
 		}
 
 		bill := api.Group("/billing")
