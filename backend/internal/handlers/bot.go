@@ -119,17 +119,6 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			}
 		}
 		h.log.Infow("botEnsureUser: CreateSubscription ok", "userID", maskInt(user.ID), "subId", clientInfo.SubID)
-
-		// Referral: record a pending referral for the referrer (rewarded on the
-		// referred user's first paid purchase) and grant the referred user a
-		// signup bonus immediately.
-		if body.ReferralCode != "" {
-			if referrer, rerr := h.store.GetUserByReferralCode(ctx, body.ReferralCode); rerr == nil && referrer.ID != user.ID {
-				if cerr := h.store.CreateReferral(ctx, referrer.ID, user.ID, h.cfg.ReferralRewardDays); cerr == nil {
-					h.applyReferralSignupBonus(ctx, sub)
-				}
-			}
-		}
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -143,6 +132,21 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 			h.log.Errorw("botEnsureUser: renew error", "userID", maskInt(user.ID), "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to renew subscription"})
 			return
+		}
+	}
+
+	// Referral: attribute the user to the referrer (rewarded on the referred
+	// user's first paid purchase) and grant the referred user a one-time signup
+	// bonus. This runs for both new and existing users — a referral link must
+	// work even for accounts created before the link was clicked. The bonus and
+	// the pending referral are recorded only once per referrer/referred pair.
+	if body.ReferralCode != "" {
+		if referrer, rerr := h.store.GetUserByReferralCode(ctx, body.ReferralCode); rerr == nil && referrer.ID != user.ID {
+			if _, gerr := h.store.GetReferral(ctx, referrer.ID, user.ID); errors.Is(gerr, store.ErrNotFound) {
+				if cerr := h.store.CreateReferral(ctx, referrer.ID, user.ID, h.cfg.ReferralRewardDays); cerr == nil {
+					h.applyReferralSignupBonus(ctx, sub)
+				}
+			}
 		}
 	}
 

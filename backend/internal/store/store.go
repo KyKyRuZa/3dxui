@@ -331,6 +331,24 @@ INSERT INTO referrals (referrer_id, referred_id, status, reward_days)
 	return err
 }
 
+// GetReferral returns any referral (pending or completed) between the given
+// referrer and referred, or ErrNotFound if none exists. Used to avoid
+// double-attributing a referral or crediting the bonus twice.
+func (s *Store) GetReferral(ctx context.Context, referrerID, referredID int64) (*models.Referral, error) {
+	var r models.Referral
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, referrer_id, referred_id, status, reward_days, created_at, completed_at
+FROM referrals WHERE referrer_id = $1 AND referred_id = $2`, referrerID, referredID).
+		Scan(&r.ID, &r.ReferrerID, &r.ReferredID, &r.Status, &r.RewardDays, &r.CreatedAt, &r.CompletedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // GetPendingReferral returns the open referral where the given user was referred.
 func (s *Store) GetPendingReferral(ctx context.Context, referredID int64) (*models.Referral, error) {
 	var r models.Referral

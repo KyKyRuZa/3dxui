@@ -13,7 +13,9 @@
 - Модуль бэкенда: `github.com/ilyas/vpn-service/backend` (исторически такое имя пакета).
 - Git-remote: `github.com/KyKyRuZa/3dxui` (ветка `master`).
 - Статус (на 2026-08-29): бот снова стабильно видит пользователей и подписки, добавлен
-  механизм уведомлений бота о продлении через сайт. Остаётся тестовый запуск оплаты в
+  механизм уведомлений бота о продлении через сайт. **Проверено end-to-end:** уведомления
+  о продлении (`/api/bot/notifications/renewed` → `send_renewal_notifications`) работают,
+  бот шлёт «✅ Подписка продлена!» в Telegram. Остаётся тестовый запуск оплаты в
   тестовом магазине ЮKassa и CRUD тарифов.
 
 ## 2. Архитектура (docker-compose)
@@ -64,6 +66,12 @@
   `t.me/AutoColorsBot?start=<code>` (ссылка подтягивается через `backend_referral`).
 - Фоновый цикл раз в `NOTIFY_INTERVAL` (по умолч. 3600с). Проверено на `tg_699469085`:
   `expires_at` = now+2д, уведомление приходит.
+- **Уведомления о продлении через сайт (проверено 2026-08-29):** таблица
+  `renewal_notifications` (user_id, telegram_id, expires_at, notified_at); после
+  успешного `provisionPlan` (webhook ЮKassa) пишется запись; бот poll'ит
+  `GET /api/bot/notifications/renewed` и шлёт «✅ Подписка продлена!». Дедуп по
+  `notified_at`. Эндпоинт защищён `BotRequired`. Проверено end-to-end на `tg_699469085`:
+  бот шлёт уведомление, в логах `sent 1 renewal notifications`.
 
 ### 3.3 Реферальная программа — ФУНДАМЕНТ ГОТОВ (без биллинга)
 - `users.referral_code` (уникальный; существующим юзерам backfill как `ref<id>`).
@@ -78,10 +86,20 @@
   зеркалит бот-эндпоинт и отдаёт `referral_code`, `invited`, `earned_days`, `bot_username`.
   Фронт `frontend/src/components/Referral.tsx` строит `t.me/<bot_username>?start=<code>`,
   копирует ссылку и показывает счётчики. `bot_username` берётся из `BOT_USERNAME` (дефолт `AutoColorsBot`).
+- **БАГ (исправлен 2026-08-31):** атрибуция реферала работала только для **совсем новых**
+  юзеров — запись `referrals` и `+2 дня` приведённому были внутри ветки «нет подписки»
+  в `botEnsureUser` (`handlers/bot.go`). Существующий аккаунт, кликнувший реф-ссылку
+  впервые, НЕ приписывался рефереру. Исправлено: атрибуция вынесена из ветки «новый
+  юзер», выполняется для любого юзера с валидным `referral_code`, один раз на пару
+  (через `store.GetReferral`, `ON CONFLICT DO NOTHING`), и размещена ПОСЛЕ `renewSubscription`,
+  чтобы бонус не перетирался продлением. Добавлен `store.GetReferral`. Проверка на сервере —
+  скрипт `scripts/verify_referral.sh` (создаёт реферера+приведённого, проверяет строку в БД).
+  Все `go test ./...` проходят.
 
 ### 3.4 Прочие правки (важно для контекста)
 - `BOT_API_SECRET` теперь проброшен в `backend` и сервис `bot` добавлен в compose
-  (раньше `/api/bot/*` падал с 404/401).
+  (раньше `/api/bot/*` падал с 404/401). Без `BOT_API_SECRET` в `.env` middleware
+  `BotRequired` возвращает 404, а в логах контейнера видно `The "BOT_API_SECRET" variable is not set`.
 - Коллизия `email` UNIQUE устранена: колонка стала nullable + частичный индекс
   `idx_users_email` (уникальность только для непустых); `CreateUser` пишет `NULL`.
 - **БАГ (исправлен 2026-08-29):** `models.User.Email` был `string`, а в БД `email` —
@@ -94,11 +112,15 @@
   `renewal_notifications` (user_id, telegram_id, expires_at, notified_at); после
   успешного `provisionPlan` (webhook ЮKassa) пишется запись; бот poll'ит
   `GET /api/bot/notifications/renewed` и шлёт «✅ Подписка продлена!». Дедуп по
-  `notified_at`. Эндпоинт защищён `BotRequired`.
+  `notified_at`. Эндпоинт защищён `BotRequired`. Проверено end-to-end на `tg_699469085`:
+  бот шлёт уведомление, в логах `sent 1 renewal notifications`.
 - **Очистка логов**: последний `fmt.Println` в `internal/auth/jwt.go` заменён на
   `zap.SugaredLogger.Warn`; `NewTokenService` теперь принимает логгер из `cmd/main.go`.
   В бэкенде больше нет `fmt.Print*`; `log.Fatalf` в `main.go` остаются только на
   раннем старте до инициализации zap и не содержат ПДн.
+- **Важно:** `/api/bot/referral` — это POST, не GET. При вызове из бота
+  `backend_referral()` отправляет POST с `{"telegram_id": ...}` (`bot/main.py:58-68`).
+  Ручной тест: `curl -X POST -H "X-Bot-Secret: ..." -d '{"telegram_id":699469085}' ...`.
 
 ### 3.5 Биллинг ЮKassa — РАБОТАЕТ (MVP, тестовый магазин)
 - Клиент ЮKassa: `internal/billing/yookassa.go` (`CreatePayment`, `GetPayment`, Basic-auth,
@@ -198,6 +220,9 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   сгенерировать EC P256 PEM (`openssl ecparam -name prime256v1 -genkey -noout`) и задать
   `JWT_PRIVATE_KEY` в `.env` + пробросить `JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}` в
   `backend.environment` compose-файла, затем пересобрать backend.
+- **BOT_API_SECRET обязателен для работы бот-эндпоинтов:** если переменная не задана,
+  middleware `BotRequired` возвращает 404, а в логах видно `The "BOT_API_SECRET" variable is not set`.
+  Добавь `BOT_API_SECRET` в `.env` и пересобери `backend` и `bot`.
 - **DNS-инъекция РКН:** домен `thenomoreblocks.com` может блокироваться на уровне провайдера
   (клиенты получают битый DNS на WiFi, при этом мобильный интернет/через VPN работает).
   Панель 3x-ui имеет фикс: явно задать «Server IP» = `2.26.138.90` (тогда клиентские конфиги
@@ -210,6 +235,7 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   nginx (`nginx/conf.d`) при этом не меняется.
 - Миграции в `db.go` написаны как `CREATE TABLE IF NOT EXISTS` + `ALTER ... IF NOT EXISTS`
   (идемпотентны, безопасны для уже созданной БД, включая ослабление старых NOT NULL).
+- `/api/bot/referral` — это POST, не GET. При вызове из бота отправляется POST с `{"telegram_id": ...}`.
 
 ## 7. Быстрый индекс файлов для правок
 
