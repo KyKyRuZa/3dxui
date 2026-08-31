@@ -62,6 +62,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		auth := api.Group("/auth")
 		{
 			auth.POST("/telegram", h.telegram)
+			auth.POST("/telegram/widget", h.telegramWidget)
 			auth.POST("/refresh", h.refresh)
 			auth.POST("/logout", h.logout)
 			auth.GET("/profile", middleware.AuthRequired(h.jwt), h.profile)

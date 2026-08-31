@@ -158,6 +158,59 @@ func (h *Handler) telegram(c *gin.Context) {
 	h.issueSession(c, user)
 }
 
+// telegramWidget registers/logs in a user via the Telegram Login Widget. The
+// widget delivers user fields (id, name, ...) plus a HMAC `hash`; this endpoint
+// verifies the hash against the bot token before creating/linking the account.
+// This is the only path available to users signing in from a regular browser
+// (i.e. outside a Telegram WebApp).
+func (h *Handler) telegramWidget(c *gin.Context) {
+	var u auth.TelegramUser
+	if err := c.ShouldBindJSON(&u); err != nil || u.ID == 0 || u.Hash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if err := auth.VerifyTelegramWidget(u, h.cfg.BotToken, 86400); err != nil {
+		h.log.Debugw("telegramWidget: verify failed", "telegramID", u.ID, "error", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid telegram data"})
+		return
+	}
+
+	username := u.Username
+	if username == "" {
+		username = fmt.Sprintf("tg_%d", u.ID)
+	}
+
+	ctx := c.Request.Context()
+	user, err := h.store.GetUserByUsername(ctx, username)
+	if errors.Is(err, store.ErrNotFound) {
+		_, hash := auth.NewRefreshToken()
+		if hash == "" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		user, err = h.store.CreateUser(ctx, username, "", hash)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		if err := h.store.SetTelegramID(ctx, user.ID, u.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Keep the Telegram id in sync (e.g. account created via WebApp earlier).
+	if !user.TelegramID.Valid || user.TelegramID.Int64 != u.ID {
+		_ = h.store.SetTelegramID(ctx, user.ID, u.ID)
+	}
+
+	h.issueSession(c, user)
+}
+
 func userIDFromContext(c *gin.Context) (int64, bool) {
 	v, ok := c.Get("user_id")
 	if !ok {

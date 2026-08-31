@@ -66,6 +66,27 @@
   width: 100%;
 }
 
+.subtitle {
+  font-size: 14px;
+  color: var(--color-muted);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.widget {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 4px;
+  min-height: 40px;
+}
+
+.hint {
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 13px;
+  min-height: 18px;
+}
+
 .switch {
   margin-top: 16px;
   text-align: center;

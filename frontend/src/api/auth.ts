@@ -31,3 +31,18 @@ export async function telegram(initData: string): Promise<AuthResponse> {
   const { data } = await api.post<AuthResponse>("/auth/telegram", { init_data: initData });
   return data;
 }
+
+export interface TelegramWidgetUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
+}
+
+export async function telegramWidget(user: TelegramWidgetUser): Promise<AuthResponse> {
+  const { data } = await api.post<AuthResponse>("/auth/telegram/widget", user);
+  return data;
+}

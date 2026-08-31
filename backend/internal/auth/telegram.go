@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 )
 
 // ValidateTelegramInitData verifies the `initData` query string sent by Telegram
@@ -47,6 +48,69 @@ func ValidateTelegramInitData(initData, botToken string) (userID int64, username
 	}
 	return userID, username, nil
 }
+
+// TelegramUser is the user payload delivered by the Telegram Login Widget.
+type TelegramUser struct {
+	ID        int64  `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Username  string `json:"username"`
+	PhotoURL  string `json:"photo_url"`
+	AuthDate  int64  `json:"auth_date"`
+	Hash      string `json:"hash"`
+}
+
+// VerifyTelegramWidget checks the `hash` of a Telegram Login Widget payload.
+// Unlike WebApp initData (which uses HMAC with the "WebAppData" key), the Login
+// Widget uses secret_key = SHA256(botToken) and excludes only `hash` from the
+// data-check-string. Returns an error on mismatch or stale auth_date.
+func VerifyTelegramWidget(u TelegramUser, botToken string, maxAgeSeconds int64) error {
+	if u.Hash == "" {
+		return fmt.Errorf("missing hash")
+	}
+
+	parts := []string{}
+	add := func(k, v string) {
+		if v != "" {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
+	add("auth_date", fmt.Sprintf("%d", u.AuthDate))
+	add("first_name", u.FirstName)
+	add("id", fmt.Sprintf("%d", u.ID))
+	add("last_name", u.LastName)
+	add("photo_url", u.PhotoURL)
+	add("username", u.Username)
+
+	dataCheck := strings.Join(parts, "\n")
+
+	secretKey := sha256Sum([]byte(botToken))
+	expected := hmacSHA256([]byte(secretKey), []byte(dataCheck))
+
+	if !hmac.Equal([]byte(u.Hash), []byte(expected)) {
+		return fmt.Errorf("invalid hash")
+	}
+
+	if maxAgeSeconds > 0 {
+		age := nowSeconds() - u.AuthDate
+		if age < 0 || age > maxAgeSeconds {
+			return fmt.Errorf("stale auth_date")
+		}
+	}
+	return nil
+}
+
+func sha256Sum(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func nowSeconds() int64 {
+	return timeNow().Unix()
+}
+
+// timeNow is a var so it can be overridden in tests.
+var timeNow = func() time.Time { return time.Now() }
 
 func hmacSHA256(key, msg []byte) string {
 	h := hmac.New(sha256.New, key)

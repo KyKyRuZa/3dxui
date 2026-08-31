@@ -1,45 +1,72 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@components/Button";
 import { useAuth } from "@hooks/useAuth";
 import { getPublicConfig } from "@api/config";
+import { telegramWidget, type TelegramWidgetUser } from "@api/auth";
+import { setAccessToken } from "@api/axios";
 import styles from "@styles/Auth.module.css";
+
+interface AuthResponse {
+  access_token: string;
+  user: { id: number; username: string; email: string; is_active: boolean; created_at: string };
+}
 
 export default function AuthForm() {
   const navigate = useNavigate();
-  const { telegramLogin, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [botUsername, setBotUsername] = useState("AutoColorsBot");
-
-  useEffect(() => {
-    getPublicConfig()
-      .then((c) => c.bot_username && setBotUsername(c.bot_username))
-      .catch(() => {});
-  }, []);
+  const [botUsername, setBotUsername] = useState<string | null>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isAuthenticated) void navigate("/dashboard");
   }, [isAuthenticated, navigate]);
 
-  const loginViaTelegram = async () => {
-    const initData =
-      typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initData : null;
-    if (!initData) {
-      setError("Откройте приложение через Telegram-бот, чтобы войти или зарегистрироваться.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      await telegramLogin(initData);
-      void navigate("/dashboard");
-    } catch {
-      setError("Не удалось войти через Telegram. Попробуйте ещё раз.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    getPublicConfig()
+      .then((cfg) => setBotUsername(cfg.bot_username || "AutoColorsBot"))
+      .catch(() => setBotUsername("AutoColorsBot"));
+  }, []);
+
+  useEffect(() => {
+    const login = botUsername || "AutoColorsBot";
+
+    const finish = (data: AuthResponse) => {
+      setAccessToken(data.access_token);
+      window.location.href = "/dashboard";
+    };
+
+    (window as unknown as { onTelegramAuth?: (user: TelegramWidgetUser) => void }).onTelegramAuth =
+      async (user: TelegramWidgetUser) => {
+        setLoading(true);
+        setError("");
+        try {
+          const data = await telegramWidget(user);
+          finish(data);
+        } catch {
+          setError("Не удалось войти через Telegram. Попробуйте ещё раз.");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.async = true;
+    script.setAttribute("data-telegram-login", login);
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-userpic", "false");
+    script.setAttribute("data-onauth", "onTelegramAuth(user)");
+    script.setAttribute("data-request-access", "write");
+    script.onerror = () =>
+      setError("Не удалось загрузить виджет Telegram. Проверьте подключение.");
+    widgetRef.current?.appendChild(script);
+
+    return () => {
+      delete (window as unknown as { onTelegramAuth?: unknown }).onTelegramAuth;
+    };
+  }, [botUsername]);
 
   return (
     <div className={styles.wrap}>
@@ -49,14 +76,13 @@ export default function AuthForm() {
           Регистрация и вход выполняются только через Telegram. Нажмите кнопку ниже,
           чтобы привязать аккаунт и получить доступ к ключам VPN.
         </p>
-        <Button type="button" onClick={loginViaTelegram} loading={loading} block className={styles.submit}>
-          Войти через Telegram
-        </Button>
+        <div ref={widgetRef} className={styles.widget} />
+        {loading && <div className={styles.hint}>Авторизация…</div>}
         {error && <div className={styles.error}>{error}</div>}
         <div className={styles.switch}>
-          Нет Telegram под рукой? Откройте бота{" "}
-          <a href={`https://t.me/${botUsername}`} target="_blank" rel="noreferrer">
-            @{botUsername}
+          Нет Telegram под руки? Откройте бота{" "}
+          <a href={`https://t.me/${botUsername ?? "AutoColorsBot"}`} target="_blank" rel="noreferrer">
+            @{botUsername ?? "AutoColorsBot"}
           </a>{" "}
           и запустите Mini App.
         </div>
