@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,77 +12,6 @@ import (
 	"github.com/ilyas/vpn-service/backend/internal/models"
 	"github.com/ilyas/vpn-service/backend/internal/store"
 )
-
-type credentials struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-func (h *Handler) register(c *gin.Context) {
-	var body credentials
-	if err := c.ShouldBindJSON(&body); err != nil {
-		h.log.Debugw("register: bind json error", "error", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-	h.log.Debugw("register: start", "username", maskStr(body.Username), "email", maskStr(body.Email))
-	if err := validateCredentials(body.Username, body.Email, body.Password); err != nil {
-		h.log.Debugw("register: validation error", "error", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx := c.Request.Context()
-	hash, err := auth.HashPassword(body.Password)
-	if err != nil {
-		h.log.Errorw("register: hash password error", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	h.log.Debug("register: password hashed ok")
-
-	user, err := h.store.CreateUser(ctx, body.Username, body.Email, hash)
-	if errors.Is(err, store.ErrConflict) {
-		h.log.Debug("register: conflict username/email already exists")
-		c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
-		return
-	}
-	if err != nil {
-		h.log.Errorw("register: CreateUser store error", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	h.log.Infow("register: CreateUser ok", "userID", maskInt(user.ID))
-
-	h.log.Debugw("register: calling issueSession", "userID", maskInt(user.ID))
-	h.issueSession(c, user)
-	h.log.Debug("register: issueSession returned")
-}
-
-func (h *Handler) login(c *gin.Context) {
-	var body credentials
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-	if body.Username == "" || body.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "username and password required"})
-		return
-	}
-
-	ctx := c.Request.Context()
-	user, err := h.store.GetUserByUsername(ctx, body.Username)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
-	}
-	if !auth.CheckPassword(user.PasswordHash, body.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
-		return
-	}
-	h.issueSession(c, user)
-}
 
 func (h *Handler) refresh(c *gin.Context) {
 	raw, err := c.Cookie("refresh_token")
@@ -143,69 +71,6 @@ func (h *Handler) profile(c *gin.Context) {
 	c.JSON(http.StatusOK, user.Public())
 }
 
-func (h *Handler) updateProfile(c *gin.Context) {
-	userID, ok := userIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	var body struct {
-		Email string `json:"email"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil || !strings.Contains(body.Email, "@") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid email"})
-		return
-	}
-	if err := h.store.UpdateEmail(c.Request.Context(), userID, body.Email); errors.Is(err, store.ErrConflict) {
-		c.JSON(http.StatusConflict, gin.H{"error": "email already in use"})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	user, _ := h.store.GetUserByID(c.Request.Context(), userID)
-	c.JSON(http.StatusOK, user.Public())
-}
-
-func (h *Handler) changePassword(c *gin.Context) {
-	userID, ok := userIDFromContext(c)
-	if !ok {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-	var body struct {
-		CurrentPassword string `json:"current_password"`
-		NewPassword     string `json:"new_password"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-	if len(body.NewPassword) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 8 characters"})
-		return
-	}
-	user, err := h.store.GetUserByID(c.Request.Context(), userID)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
-		return
-	}
-	if !auth.CheckPassword(user.PasswordHash, body.CurrentPassword) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
-		return
-	}
-	hash, err := auth.HashPassword(body.NewPassword)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	if err := h.store.UpdatePassword(c.Request.Context(), userID, hash); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
-}
-
 // issueSession creates a DB session + refresh cookie and returns an access token.
 func (h *Handler) issueSession(c *gin.Context, user *models.User) {
 	h.log.Debugw("issueSession: start", "userID", maskInt(user.ID), "username", maskStr(user.Username))
@@ -239,6 +104,9 @@ func (h *Handler) issueSession(c *gin.Context, user *models.User) {
 	})
 }
 
+// telegram registers/logs in a user via Telegram. The site has no email/password
+// flow: identity is established exclusively from the signed Telegram WebApp
+// initData. A new user is auto-created (username tg_<id>) on first sign-in.
 func (h *Handler) telegram(c *gin.Context) {
 	var body struct {
 		InitData string `json:"init_data"`
@@ -260,8 +128,11 @@ func (h *Handler) telegram(c *gin.Context) {
 	ctx := c.Request.Context()
 	user, err := h.store.GetUserByUsername(ctx, username)
 	if errors.Is(err, store.ErrNotFound) {
+		// No email/password account exists; create a Telegram-only identity.
+		// password_hash is kept NOT NULL in the schema, so store a random
+		// placeholder — it is never used for authentication.
 		_, hash := auth.NewRefreshToken()
-		if err != nil {
+		if hash == "" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
@@ -274,22 +145,17 @@ func (h *Handler) telegram(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
+	} else if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Keep the Telegram id in sync (e.g. if the account was created elsewhere).
+	if !user.TelegramID.Valid || user.TelegramID.Int64 != userID {
+		_ = h.store.SetTelegramID(ctx, user.ID, userID)
 	}
 
 	h.issueSession(c, user)
-}
-
-func validateCredentials(username, email, password string) error {
-	if len(username) < 3 || len(username) > 32 {
-		return errors.New("username must be 3-32 characters")
-	}
-	if !strings.Contains(email, "@") || len(email) > 254 {
-		return errors.New("invalid email")
-	}
-	if len(password) < 8 {
-		return errors.New("password must be at least 8 characters")
-	}
-	return nil
 }
 
 func userIDFromContext(c *gin.Context) (int64, bool) {

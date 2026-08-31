@@ -1,37 +1,41 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@components/Button";
 import { useAuth } from "@hooks/useAuth";
+import { getPublicConfig } from "@api/config";
 import styles from "@styles/Auth.module.css";
 
-function errorMessage(err: unknown): string {
-  const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
-  return data?.error ?? "Произошла ошибка, попробуйте позже";
-}
-
-export default function AuthForm({ type = "login" }: { type?: "login" | "register" }) {
+export default function AuthForm() {
   const navigate = useNavigate();
-  const { login, register } = useAuth();
-
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { telegramLogin, isAuthenticated } = useAuth();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [botUsername, setBotUsername] = useState("AutoColorsBot");
 
-  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError("");
+  useEffect(() => {
+    getPublicConfig()
+      .then((c) => c.bot_username && setBotUsername(c.bot_username))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) void navigate("/dashboard");
+  }, [isAuthenticated, navigate]);
+
+  const loginViaTelegram = async () => {
+    const initData =
+      typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initData : null;
+    if (!initData) {
+      setError("Откройте приложение через Telegram-бот, чтобы войти или зарегистрироваться.");
+      return;
+    }
     setLoading(true);
+    setError("");
     try {
-      if (type === "login") {
-        await login(username, password);
-      } else {
-        await register(username, email, password);
-      }
+      await telegramLogin(initData);
       void navigate("/dashboard");
-    } catch (err) {
-      setError(errorMessage(err));
+    } catch {
+      setError("Не удалось войти через Telegram. Попробуйте ещё раз.");
     } finally {
       setLoading(false);
     }
@@ -40,54 +44,21 @@ export default function AuthForm({ type = "login" }: { type?: "login" | "registe
   return (
     <div className={styles.wrap}>
       <div className={styles.card}>
-        <div className={styles.title}>{type === "login" ? "Вход" : "Регистрация"}</div>
-        <form className={styles.form} onSubmit={onSubmit}>
-          <div className={styles.field}>
-            <label className={styles.label}>Имя пользователя</label>
-            <input
-              className={styles.input}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-              minLength={3}
-            />
-          </div>
-          {type === "register" && (
-            <div className={styles.field}>
-              <label className={styles.label}>Email</label>
-              <input
-                className={styles.input}
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-              />
-            </div>
-          )}
-          <div className={styles.field}>
-            <label className={styles.label}>Пароль</label>
-            <input
-              className={styles.input}
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete={type === "login" ? "current-password" : "new-password"}
-              required
-              minLength={8}
-            />
-          </div>
-          <Button type="submit" loading={loading} block className={styles.submit}>
-            {type === "login" ? "Войти" : "Создать аккаунт"}
-          </Button>
-          {error && <div className={styles.error}>{error}</div>}
-        </form>
+        <div className={styles.title}>Вход через Telegram</div>
+        <p className={styles.subtitle}>
+          Регистрация и вход выполняются только через Telegram. Нажмите кнопку ниже,
+          чтобы привязать аккаунт и получить доступ к ключам VPN.
+        </p>
+        <Button type="button" onClick={loginViaTelegram} loading={loading} block className={styles.submit}>
+          Войти через Telegram
+        </Button>
+        {error && <div className={styles.error}>{error}</div>}
         <div className={styles.switch}>
-          {type === "login" ? "Нет аккаунта? " : "Уже есть аккаунт? "}
-          <Link to={type === "login" ? "/register" : "/login"}>
-            {type === "login" ? "Зарегистрироваться" : "Войти"}
-          </Link>
+          Нет Telegram под рукой? Откройте бота{" "}
+          <a href={`https://t.me/${botUsername}`} target="_blank" rel="noreferrer">
+            @{botUsername}
+          </a>{" "}
+          и запустите Mini App.
         </div>
       </div>
     </div>

@@ -7,8 +7,6 @@ interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
   telegramLogin: (initData: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: User) => void;
@@ -25,18 +23,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const setUser = useCallback((u: User) => setUserState(u), []);
-
-  const login = useCallback(async (username: string, password: string) => {
-    const data = await authApi.login(username, password);
-    applySession(data);
-    setUserState(data.user);
-  }, []);
-
-  const register = useCallback(async (username: string, email: string, password: string) => {
-    const data = await authApi.register(username, email, password);
-    applySession(data);
-    setUserState(data.user);
-  }, []);
 
   const telegramLogin = useCallback(async (initData: string) => {
     const data = await authApi.telegram(initData);
@@ -85,8 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         isAuthenticated: Boolean(user),
         loading,
-        login,
-        register,
         telegramLogin,
         logout,
         setUser,

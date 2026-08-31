@@ -61,14 +61,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 		auth := api.Group("/auth")
 		{
-			auth.POST("/register", h.register)
-			auth.POST("/login", h.login)
+			auth.POST("/telegram", h.telegram)
 			auth.POST("/refresh", h.refresh)
 			auth.POST("/logout", h.logout)
-			auth.POST("/telegram", h.telegram)
 			auth.GET("/profile", middleware.AuthRequired(h.jwt), h.profile)
-			auth.PATCH("/profile", middleware.AuthRequired(h.jwt), h.updateProfile)
-			auth.POST("/password", middleware.AuthRequired(h.jwt), h.changePassword)
 		}
 
 		sub := api.Group("/subscription")
@@ -116,5 +112,6 @@ func (h *Handler) health(c *gin.Context) {
 func (h *Handler) publicConfig(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"yookassa_test_mode": h.cfg.YookassaTestMode,
+		"bot_username":       h.cfg.BotUsername,
 	})
 }

@@ -234,6 +234,21 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 Добавить новый сценарий = положить строку в `bot_notifications` + добавить ветку в
 `render_bot_notification` (`bot/main.py`); эндпоинт и цикл уже всё разберут.
 
+### 3.7 Аутентификация только через Telegram (2026-08-31)
+
+- Удалён email/password: эндпоинты `POST /api/auth/register`, `POST /api/auth/login`,
+  `PATCH /api/auth/profile` (email), `POST /api/auth/password` убраны. Регистрация и вход —
+  **только** через `POST /api/auth/telegram` (валидация подписи `init_data` Telegram WebApp,
+  `auth.ValidateTelegramInitData`). Новый юзер создаётся автоматически (`username = tg_<id>`).
+- `users.password_hash` остаётся `NOT NULL` в схеме, но для Telegram-аккаунтов хранит
+  случайный placeholder (не используется для входа — логин только по `init_data`).
+- Фронт: `/login` и `/register` рендерят `AuthForm` (кнопка «Войти через Telegram»);
+  при открытии сайта как Mini App `window.Telegram.WebApp.initData` авто-логинит
+  пользователя (см. `frontend/src/store/auth.tsx`). В обычном браузере `AuthForm` даёт
+  глубокую ссылку на бота (`https://t.me/<bot_username>`, `bot_username` из `GET /api/config`).
+- Логин вне Telegram невозможен: пользователь должен открыть Mini App из бота
+  (`Открыть WebApp` в `bot/main.py` → `WEB_APP_URL`).
+
 ## 6. Подводные камни (gotchas)
 
 - Бэкенд в compose не проброшен на хост; curl-тесты делать изнутри сети (`docker compose exec backend`)
