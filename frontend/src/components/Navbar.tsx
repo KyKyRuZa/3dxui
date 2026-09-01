@@ -1,9 +1,11 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@hooks/useAuth";
 import styles from "@styles/Navbar.module.css";
 
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
+  const location = useLocation();
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
 
   return (
     <nav className={styles.nav}>
@@ -28,14 +30,14 @@ export default function Navbar() {
                 Выйти
               </button>
             </>
-          ) : (
+          ) : !isAuthPage ? (
             <>
               <Link to="/login">Вход</Link>
               <Link to="/register" className="button-primary">
                 Регистрация
               </Link>
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </nav>
