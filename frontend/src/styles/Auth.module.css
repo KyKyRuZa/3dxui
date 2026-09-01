@@ -165,3 +165,14 @@
   padding: 0;
   text-decoration: underline;
 }
+
+.codeToggle {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.codeLogin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

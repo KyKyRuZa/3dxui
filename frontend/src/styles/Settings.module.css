@@ -131,6 +131,54 @@
   gap: 8px;
 }
 
+.tgButton {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: #0088cc;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.tgButton:hover {
+  background: #0077b5;
+}
+
+.tgButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bindCode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(0, 136, 204, 0.05);
+  border: 1px solid rgba(0, 136, 204, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.codeBox {
+  display: block;
+  padding: 8px 12px;
+  background: var(--color-surface-2, #1a1e27);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 14px;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.tgLink {
+  color: #0088cc;
+  text-decoration: underline;
+  text-align: center;
+  font-size: 14px;
+}
+
 .error {
   color: var(--color-danger);
   font-size: 13px;

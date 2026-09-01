@@ -70,6 +70,18 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.POST("/refresh", h.refresh)
 			auth.POST("/logout", h.logout)
 			auth.GET("/profile", middleware.AuthRequired(h.jwt), h.profile)
+			auth.POST("/verify-login-code", h.verifyLoginCode)
+		}
+
+		// Telegram bind/login code endpoints
+		codes := api.Group("/codes")
+		{
+			// Public: generate login code for Telegram user (called by bot)
+			codes.POST("/login", h.generateLoginCode)
+			// Authenticated: generate bind code for current user
+			codes.POST("/bind", middleware.AuthRequired(h.jwt), h.generateBindCode)
+			// Authenticated: verify bind code (called by bot or frontend)
+			codes.POST("/bind/verify", middleware.AuthRequired(h.jwt), h.verifyBindCode)
 		}
 
 		sub := api.Group("/subscription")

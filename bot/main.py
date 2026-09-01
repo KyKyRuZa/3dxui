@@ -55,6 +55,37 @@ async def backend_ensure_user(telegram_id: int, first_name: str | None = None, r
     return resp.json()
 
 
+async def backend_generate_bind_code(telegram_id: int, code: str) -> bool:
+    """Verify a bind code and link Telegram to the user account. Returns True on success."""
+    try:
+        resp = await http_client.post(
+            f"{BACKEND_URL}/api/codes/bind/verify",
+            headers=api_headers(),
+            json={"code": code, "telegram_id": telegram_id},
+            timeout=30,
+        )
+        return resp.status_code == 200
+    except Exception:  # noqa: BLE001
+        return False
+
+
+async def backend_generate_login_code(telegram_id: int) -> str | None:
+    """Generate a login code for a Telegram user. Returns the code or None."""
+    try:
+        resp = await http_client.post(
+            f"{BACKEND_URL}/api/codes/login",
+            headers=api_headers(),
+            json={"telegram_id": telegram_id},
+            timeout=30,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("code")
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 async def backend_claim_login_token(token: str, telegram_id: int) -> bool:
     """Claim a browser login token for this Telegram user. Returns True on success."""
     try:
@@ -293,6 +324,25 @@ async def cmd_start(message: types.Message) -> None:
     parts = message.text.split(maxsplit=1)
     if len(parts) > 1 and parts[1].strip():
         param = parts[1].strip()
+
+        # Handle bind code: /start bind-XXXXXXXX
+        if param.startswith("bind-") and len(param) > 5:
+            code = param[5:].strip()
+            if await backend_generate_bind_code(message.from_user.id, code):
+                await message.answer(
+                    "✅ <b>Telegram привязан к аккаунту!</b>\n\n"
+                    "Теперь вы можете входить на сайт через код из бота.\n"
+                    "Используйте /link для получения кода входа.",
+                    reply_markup=main_menu_keyboard(),
+                )
+            else:
+                await message.answer(
+                    "❌ <b>Не удалось привязать Telegram.</b>\n\n"
+                    "Код недействителен или истёк. Получите новый код на сайте.",
+                    reply_markup=main_menu_keyboard(),
+                )
+            return
+
         # A 32-char token is a browser login deep link; claim it for this user.
         if len(param) >= 16 and await backend_claim_login_token(param, message.from_user.id):
             await message.answer(
@@ -306,7 +356,8 @@ async def cmd_start(message: types.Message) -> None:
     await message.answer(
         "<b>Добро пожаловать в NoMoreBlocks VPN! 🛡️</b>\n\n"
         "Я выдаю и доставляю ваши VPN-ключи прямо сюда в Telegram.\n"
-        "Нажмите <b>🔑 Купить ключ VPN</b>, чтобы получить конфиг для обхода блокировок.",
+        "Нажмите <b>🔑 Купить ключ VPN</b>, чтобы получить конфиг для обхода блокировок.\n\n"
+        "🔐 <b>Уже есть аккаунт на сайте?</b> Используйте /link для входа через Telegram.",
         reply_markup=main_menu_keyboard(),
     )
 
@@ -378,6 +429,24 @@ async def cmd_fix(message: types.Message) -> None:
         "Выберите вашу систему:",
         reply_markup=fix_os_keyboard(),
     )
+
+
+@dp.message(Command("link"))
+async def cmd_link(message: types.Message) -> None:
+    """Generate a login code for the user to authenticate on the website."""
+    code = await backend_generate_login_code(message.from_user.id)
+    if code:
+        await message.answer(
+            f"🔐 <b>Код для входа на сайт:</b> <code>{code}</code>\n\n"
+            "Введите этот код на сайте в разделе «Войти через Telegram».\n"
+            "Код действителен 5 минут.",
+            reply_markup=main_menu_keyboard(),
+        )
+    else:
+        await message.answer(
+            "❌ Не удалось сгенерировать код. Убедитесь, что вы начали диалог с ботом.",
+            reply_markup=main_menu_keyboard(),
+        )
 
 
 @dp.message(lambda m: m.web_app_data is not None)

@@ -26,6 +26,8 @@ from main import (
     send_expired_notifications,
     send_renewal_notifications,
     backend_claim_login_token,
+    backend_generate_bind_code,
+    backend_generate_login_code,
     notification_loop,
 )
 
@@ -499,3 +501,60 @@ async def test_notification_loop_runs_once():
         mock_expired.assert_called_once()
         mock_renewed.assert_called_once()
         mock_bot.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_backend_generate_bind_code_success():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    with patch("main.http_client") as mock_http:
+        mock_http.post = AsyncMock(return_value=mock_response)
+        result = await backend_generate_bind_code(12345, "48271593")
+        assert result is True
+
+
+@pytest.mark.asyncio
+async def test_backend_generate_bind_code_failure():
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    with patch("main.http_client") as mock_http:
+        mock_http.post = AsyncMock(return_value=mock_response)
+        result = await backend_generate_bind_code(12345, "bad_code")
+        assert result is False
+
+
+@pytest.mark.asyncio
+async def test_backend_generate_bind_code_exception():
+    with patch("main.http_client") as mock_http:
+        mock_http.post = AsyncMock(side_effect=Exception("connection error"))
+        result = await backend_generate_bind_code(12345, "48271593")
+        assert result is False
+
+
+@pytest.mark.asyncio
+async def test_backend_generate_login_code_success():
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"code": "48271593", "expires_in": 300}
+    with patch("main.http_client") as mock_http:
+        mock_http.post = AsyncMock(return_value=mock_response)
+        result = await backend_generate_login_code(12345)
+        assert result == "48271593"
+
+
+@pytest.mark.asyncio
+async def test_backend_generate_login_code_failure():
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    with patch("main.http_client") as mock_http:
+        mock_http.post = AsyncMock(return_value=mock_response)
+        result = await backend_generate_login_code(99999)
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_backend_generate_login_code_exception():
+    with patch("main.http_client") as mock_http:
+        mock_http.post = AsyncMock(side_effect=Exception("connection error"))
+        result = await backend_generate_login_code(12345)
+        assert result is None

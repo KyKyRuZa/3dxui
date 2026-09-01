@@ -469,3 +469,187 @@ func (h *Handler) recordConsent(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
+
+// codeTTL is how long a verification code remains valid.
+const codeTTL = 5 * time.Minute
+
+// generateBindCode creates a code for the current user to link their Telegram.
+func (h *Handler) generateBindCode(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check if user already has Telegram linked
+	user, err := h.store.GetUserByID(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	if user.TelegramID.Valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "telegram already linked"})
+		return
+	}
+
+	// Generate 8-digit code
+	code := utils.RandDigits(8)
+	vc := store.VerificationCode{
+		Code:    code,
+		Purpose: "bind",
+		UserID:  &userID,
+	}
+
+	if err := h.store.SetVerificationCode(ctx, code, vc, codeTTL); err != nil {
+		h.log.Errorw("generateBindCode: redis error", "userID", maskInt(userID), "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	botUsername := h.cfg.BotUsername
+	c.JSON(http.StatusOK, gin.H{
+		"code":       code,
+		"bot_link":   fmt.Sprintf("https://t.me/%s?start=bind-%s", botUsername, code),
+		"expires_in": int(codeTTL.Seconds()),
+	})
+}
+
+// verifyBindCode checks the code and links Telegram to the current user.
+func (h *Handler) verifyBindCode(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var body struct {
+		Code       string `json:"code" binding:"required"`
+		TelegramID int64  `json:"telegram_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	vc, err := h.store.GetVerificationCode(ctx, body.Code)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired code"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Validate code purpose and ownership
+	if vc.Purpose != "bind" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code purpose"})
+		return
+	}
+	if vc.UserID == nil || *vc.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "code belongs to another user"})
+		return
+	}
+
+	// Link Telegram to user
+	if err := h.store.SetTelegramID(ctx, userID, body.TelegramID); err != nil {
+		if errors.Is(err, store.ErrConflict) {
+			c.JSON(http.StatusConflict, gin.H{"error": "telegram already linked to another account"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Delete used code
+	_ = h.store.DeleteVerificationCode(ctx, body.Code)
+
+	h.log.Info("Telegram linked to user", "userID", maskInt(userID), "telegramID", body.TelegramID)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// generateLoginCode creates a code for a Telegram user to log in to the site.
+func (h *Handler) generateLoginCode(c *gin.Context) {
+	var body struct {
+		TelegramID int64 `json:"telegram_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check if user exists in DB (created via /start in bot)
+	user, err := h.store.GetUserByTelegramID(ctx, body.TelegramID)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found. Please start the bot first"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Generate 8-digit code
+	code := utils.RandDigits(8)
+	vc := store.VerificationCode{
+		Code:       code,
+		TelegramID: body.TelegramID,
+		Purpose:    "login",
+		UserID:     &user.ID,
+	}
+
+	if err := h.store.SetVerificationCode(ctx, code, vc, codeTTL); err != nil {
+		h.log.Errorw("generateLoginCode: redis error", "telegramID", body.TelegramID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": code, "expires_in": int(codeTTL.Seconds())})
+}
+
+// verifyLoginCode checks the code and creates a session for the user.
+func (h *Handler) verifyLoginCode(c *gin.Context) {
+	var body struct {
+		Code string `json:"code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	vc, err := h.store.GetVerificationCode(ctx, body.Code)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired code"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	if vc.Purpose != "login" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid code purpose"})
+		return
+	}
+
+	// Get user by telegram_id
+	user, err := h.store.GetUserByTelegramID(ctx, vc.TelegramID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Delete used code
+	_ = h.store.DeleteVerificationCode(ctx, body.Code)
+
+	// Create session
+	h.issueSession(c, user)
+}

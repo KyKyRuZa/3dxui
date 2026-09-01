@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/ilyas/vpn-service/backend/internal/billing"
 	"github.com/ilyas/vpn-service/backend/internal/models"
@@ -21,10 +22,17 @@ var ErrConflict = errors.New("resource already exists")
 var ErrNotFound = errors.New("not found")
 
 type Store struct {
-	db *sql.DB
+	db    *sql.DB
+	redis *redis.Client
 }
 
-func New(db *sql.DB) *Store { return &Store{db: db} }
+func New(db *sql.DB, rdb ...*redis.Client) *Store {
+	s := &Store{db: db}
+	if len(rdb) > 0 {
+		s.redis = rdb[0]
+	}
+	return s
+}
 
 func (s *Store) CreateUser(ctx context.Context, username, email, passwordHash string) (*models.User, error) {
 	const q = `

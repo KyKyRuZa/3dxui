@@ -29,6 +29,11 @@ export default function AuthForm() {
 	const [password, setPassword] = useState("");
 	const [loading, setLoading] = useState(false);
 
+	// Telegram code login state
+	const [showCodeInput, setShowCodeInput] = useState(false);
+	const [tgCode, setTgCode] = useState("");
+	const [codeLoading, setCodeLoading] = useState(false);
+
 	useEffect(() => {
 		if (isAuthenticated) navigate("/dashboard");
 	}, [isAuthenticated, navigate]);
@@ -89,6 +94,33 @@ export default function AuthForm() {
 			setError("Ошибка сети. Попробуйте позже.");
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const handleCodeLogin = async () => {
+		if (!tgCode || tgCode.length < 6) {
+			setError("Введите код из Telegram (8 цифр).");
+			return;
+		}
+		setError("");
+		setCodeLoading(true);
+		try {
+			const res = await fetch("/api/auth/verify-login-code", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ code: tgCode }),
+			});
+			const data = await res.json();
+			if (!res.ok) {
+				setError(data.error || "Неверный или просроченный код.");
+				return;
+			}
+			setAccessToken(data.access_token);
+			window.location.href = "/dashboard";
+		} catch {
+			setError("Ошибка сети. Попробуйте позже.");
+		} finally {
+			setCodeLoading(false);
 		}
 	};
 
@@ -214,23 +246,67 @@ export default function AuthForm() {
 					<span>или</span>
 				</div>
 
-				{!loginUrl ? (
-					<button
-						className={`${buttonStyles.button} ${styles.tgButton}`}
-						onClick={startLink}
-						disabled={status === "linking"}
-					>
-						{status === "linking" ? "Загрузка..." : "Войти через Telegram"}
-					</button>
+				{!showCodeInput ? (
+					<>
+						{!loginUrl ? (
+							<button
+								className={`${buttonStyles.button} ${styles.tgButton}`}
+								onClick={startLink}
+								disabled={status === "linking"}
+							>
+								{status === "linking" ? "Загрузка..." : "Войти через Telegram"}
+							</button>
+						) : (
+							<a
+								className={`${buttonStyles.button} ${styles.tgButton}`}
+								href={loginUrl}
+								target="_blank"
+								rel="noreferrer"
+							>
+								Открыть Telegram-бота
+							</a>
+						)}
+
+						<div className={styles.codeToggle}>
+							<button
+								className={styles.linkBtn}
+								onClick={() => { setShowCodeInput(true); setError(""); }}
+							>
+								У меня есть код из Telegram
+							</button>
+						</div>
+					</>
 				) : (
-					<a
-						className={`${buttonStyles.button} ${styles.tgButton}`}
-						href={loginUrl}
-						target="_blank"
-						rel="noreferrer"
-					>
-						Открыть Telegram-бота
-					</a>
+					<div className={styles.codeLogin}>
+						<div className={styles.field}>
+							<label className={styles.label}>Код из Telegram</label>
+							<input
+								className={styles.input}
+								type="text"
+								value={tgCode}
+								onChange={(e) => setTgCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+								placeholder="48271593"
+								maxLength={8}
+								inputMode="numeric"
+							/>
+						</div>
+						<Button
+							variant="primary"
+							block
+							loading={codeLoading}
+							onClick={handleCodeLogin}
+						>
+							Войти по коду
+						</Button>
+						<div className={styles.codeToggle}>
+							<button
+								className={styles.linkBtn}
+								onClick={() => { setShowCodeInput(false); setTgCode(""); setError(""); }}
+							>
+								Назад
+							</button>
+						</div>
+					</div>
 				)}
 
 				{status === "waiting" && (

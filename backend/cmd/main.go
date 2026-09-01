@@ -50,7 +50,7 @@ func main() {
 		sugar.Fatalf("Failed to init token service: %v", err)
 	}
 
-	st := store.New(pg)
+	st := store.New(pg, redisClient)
 	panelClient := panel.New(cfg.PanelURL, cfg.PanelUsername, cfg.PanelPassword, cfg.PanelAPIToken, sugar)
 	billingClient := billing.New(cfg.YookassaShopID, cfg.YookassaSecretKey, cfg.YookassaAPIURL)
 	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient, billingClient, sugar)

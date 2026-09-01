@@ -1,14 +1,46 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import styles from "@styles/Settings.module.css";
 
 export default function Settings() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [exporting, setExporting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const { user, logout } = useAuth();
+	const navigate = useNavigate();
+	const [exporting, setExporting] = useState(false);
+	const [deleting, setDeleting] = useState(false);
+	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const [bindCode, setBindCode] = useState<string | null>(null);
+	const [botLink, setBotLink] = useState<string | null>(null);
+	const [loadingBind, setLoadingBind] = useState(false);
+
+	useEffect(() => {
+		// Check if Telegram is linked (this would need a new API endpoint or include in user profile)
+		// For now, we'll just show the bind option
+	}, []);
+
+	const handleGenerateBindCode = async () => {
+		setLoadingBind(true);
+		try {
+			const res = await fetch("/api/codes/bind", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+				},
+			});
+			const data = await res.json();
+			if (!res.ok) {
+				alert(data.error || "Не удалось сгенерировать код.");
+				return;
+			}
+			setBindCode(data.code);
+			setBotLink(data.bot_link);
+		} catch {
+			alert("Ошибка сети. Попробуйте позже.");
+		} finally {
+			setLoadingBind(false);
+		}
+	};
 
   const handleExport = async () => {
     setExporting(true);
@@ -55,7 +87,7 @@ export default function Settings() {
   return (
     <div className={styles.page}>
       <div className={styles.grid}>
-        <div className={styles.card}>
+		<div className={styles.card}>
           <h3 className={styles.title}>Аккаунт</h3>
           <div className={styles.form}>
             <div className={styles.field}>
@@ -63,8 +95,51 @@ export default function Settings() {
               <input className={styles.input} value={user?.username ?? ""} readOnly />
             </div>
             <p className={styles.hint}>
-              Вход и регистрация выполняются только через Telegram. Пароль не используется.
+              Вход и регистрация выполняются через Telegram или по паролю.
             </p>
+          </div>
+        </div>
+
+        <div className={styles.card}>
+          <h3 className={styles.title}>🔗 Привязка Telegram</h3>
+          <div className={styles.form}>
+            <p className={styles.hint}>
+              Привяжите Telegram для быстрого входа через бота и получения уведомлений.
+            </p>
+            {!bindCode ? (
+              <div className={styles.actions}>
+                <button
+                  className={styles.tgButton}
+                  onClick={handleGenerateBindCode}
+                  disabled={loadingBind}
+                >
+                  {loadingBind ? "Генерация..." : "Привязать Telegram"}
+                </button>
+              </div>
+            ) : (
+              <div className={styles.bindCode}>
+                <p className={styles.hint}>
+                  Перейдите в бота и отправьте команду:
+                </p>
+                <code className={styles.codeBox}>/start bind-{bindCode}</code>
+                {botLink && (
+                  <a
+                    className={styles.tgLink}
+                    href={botLink}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Открыть бота
+                  </a>
+                )}
+                <button
+                  className={styles.btnSecondary}
+                  onClick={() => { setBindCode(null); setBotLink(null); }}
+                >
+                  Закрыть
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
