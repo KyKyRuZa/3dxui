@@ -278,6 +278,11 @@ export default function AuthForm() {
 					</>
 				) : (
 					<div className={styles.codeLogin}>
+						<div className={styles.codeInstructions}>
+							<p>1. Откройте бота <a href={`https://t.me/${botUsername}`} target="_blank" rel="noreferrer">@{botUsername}</a></p>
+							<p>2. Отправьте команду <code>/link</code></p>
+							<p>3. Полученный код введите ниже:</p>
+						</div>
 						<div className={styles.field}>
 							<label className={styles.label}>Код из Telegram</label>
 							<input
