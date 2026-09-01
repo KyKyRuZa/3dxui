@@ -67,6 +67,9 @@ async def backend_claim_login_token(token: str, telegram_id: int) -> bool:
         return resp.status_code == 200
     except Exception:  # noqa: BLE001
         return False
+
+
+async def backend_referral(telegram_id: int) -> dict | None:
     resp = await http_client.post(
         f"{BACKEND_URL}/api/bot/referral",
         headers=api_headers(),

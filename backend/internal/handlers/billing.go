@@ -138,6 +138,12 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
+	// Idempotency: skip if we already activated this payment.
+	if local, lerr := h.store.GetPayment(ctx, payload.Object.ID); lerr == nil && local.Status == "succeeded" {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+
 	// Re-fetch from the API to verify authenticity and status.
 	verified, err := h.billing.GetPayment(payload.Object.ID)
 	if err != nil {
@@ -153,12 +159,6 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 	userID, planID := resolvePaymentTarget(ctx, h, verified, payload.Object.ID)
 	if userID == 0 || planID == "" {
 		h.log.Warnw("webhook: cannot resolve target", "paymentID", maskStr(payload.Object.ID))
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-		return
-	}
-
-	// Idempotency: skip if we already activated this payment.
-	if local, lerr := h.store.GetPayment(ctx, payload.Object.ID); lerr == nil && local.Status == "succeeded" {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
