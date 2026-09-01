@@ -18,19 +18,6 @@ function applySession(data: authApi.AuthResponse) {
 	setAccessToken(data.access_token)
 }
 
-// Generates a simple hash of the consent text for the given timestamp.
-// This proves the user consented to a specific version of the policy.
-function generateConsentHash(timestamp: number): string {
-	const text = `privacy_policy_v1_${timestamp}`;
-	let hash = 0;
-	for (let i = 0; i < text.length; i++) {
-		const char = text.charCodeAt(i);
-		hash = ((hash << 5) - hash) + char;
-		hash = hash & hash;
-	}
-	return Math.abs(hash).toString(16);
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
 	const [user, setUserState] = useState<User | null>(null);
 	const [loading, setLoading] = useState(true);
