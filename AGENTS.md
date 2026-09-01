@@ -180,14 +180,23 @@
    добавлена рекомендация: при проблемах с сайтом на WiFi — выполнить первоначальные действия
    через мобильный хотспот (мобильный интернет), а потом вернуться на WiFi; туннель VPN
    работает на любом соединении.
+8. **Соответствие 152-ФЗ**: реализован базовый функционал для соответствия Федеральному
+   закону № 152-ФЗ «О персональных данных»:
+   - Политика конфиденциальности: `frontend/src/pages/Privacy.tsx` (доступна по `/privacy`)
+   - Сбор согласия при регистрации: checkbox в `AuthForm.tsx` + запись в `consent_records`
+   - Экспорт данных: `GET /api/user/data-export` (все данные пользователя)
+   - Удаление аккаунта: `DELETE /api/user` (каскадное удаление всех данных)
+   - Cookie consent banner: `frontend/src/components/CookieConsent.tsx`
+   - Таблица `consent_records` для хранения записей о согласии
+   - Права субъекта: доступ к данным, удаление, отзыв согласия
+   - **TODO**: необходимо назначить ответственного за обработку ПД и опубликовать контакты
 
 ## 5. Как запускать и проверять
 
 ```bash
 cp .env.example .env        # заполнить BOT_TOKEN, BOT_API_SECRET, DATABASE_URL, REDIS_URL,
-                            # JWT_SECRET, PANEL_URL/USERNAME/PASSWORD/API_TOKEN, DEFAULT_INBOUND_IDS
+                            # PANEL_URL/USERNAME/PASSWORD/API_TOKEN, DEFAULT_INBOUND_IDS
 docker compose up -d --build backend bot
-docker compose logs -f bot
 ```
 
 Проверка выдачи ключа ботом (изнутри сети контейнеров):
@@ -263,6 +272,21 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   был реализован, но ЗАМЕНЁН на deep-link (виджет требовал `/setdomain` у @BotFather и
   имел проблемы с CSP). Код виджета остался в кодовой базе как резервный — можно удалить,
   если не понадобится.
+
+## 4. Безопасность и исправления (актуально 2026-09-01)
+
+### 4.1 Исправленные уязвимости
+- **Race condition в вебхуке ЮKassa**: добавлен атомарный `ClaimPayment` (`UPDATE ... WHERE status NOT IN`),
+  предотвращает двойное продление подписки при параллельных вебхуках.
+- **Race condition в рефералах**: `CreateReferral` теперь возвращает `(bool, error)`,
+  бонус начисляется только если именно этот запрос создал запись.
+- **initData replay protection**: добавлена проверка `auth_date` (max 24 часа) в `ValidateTelegramInitData`.
+- **TLS верификация**: `InsecureSkipVerify` теперь включается только через `PANEL_INSECURE_SKIP_VERIFY=true`.
+- **SameSite cookie**: refresh token cookie теперь с `SameSite=Strict` (защита от CSRF).
+- **Панель аутентификация**: добавлен `cookiejar` для сохранения сессионных cookies.
+- **Дублирование уведомлений**: добавлен атомарный `ClaimBotNotifications` с `FOR UPDATE SKIP LOCKED`.
+- **parseInt64**: теперь возвращает ошибку вместо  silencе 0.
+- **JWT_SECRET**: убран из required config (не используется, JWT работает на EC ключах).
 
 ## 6. Подводные камни (gotchas)
 

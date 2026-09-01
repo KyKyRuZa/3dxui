@@ -710,3 +710,114 @@ FROM telegram_login_tokens WHERE token = $1`, token).
 	}
 	return &t, nil
 }
+
+// RecordConsent stores a user's consent to personal data processing.
+func (s *Store) RecordConsent(ctx context.Context, userID int64, consentType, consentHash, ip string) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO consent_records (user_id, consent_type, consent_hash, ip)
+VALUES ($1, $2, $3, $4)`, userID, consentType, consentHash, ip)
+	return err
+}
+
+// GetConsentRecords returns all consent records for a user.
+func (s *Store) GetConsentRecords(ctx context.Context, userID int64) ([]models.ConsentRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, user_id, consent_type, consent_hash, ip, created_at, revoked_at
+FROM consent_records WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.ConsentRecord, 0)
+	for rows.Next() {
+		var c models.ConsentRecord
+		if err := rows.Scan(&c.ID, &c.UserID, &c.ConsentType, &c.ConsentHash, &c.IP, &c.CreatedAt, &c.RevokedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// DeleteUser permanently removes a user and all associated data (152-FZ right to erasure).
+// All foreign keys have ON DELETE CASCADE, so this removes sessions, subscriptions,
+// referrals, payments, notifications, and consent records.
+func (s *Store) DeleteUser(ctx context.Context, userID int64) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	return err
+}
+
+// DataExport contains all personal data for a user (152-FZ right of access).
+type DataExport struct {
+	User         models.User           `json:"user"`
+	Sessions     []models.Session      `json:"sessions"`
+	Subscription *models.Subscription  `json:"subscription,omitempty"`
+	Referrals    []models.Referral     `json:"referrals"`
+	Payments     []models.PaymentRow   `json:"payments"`
+	Consent      []models.ConsentRecord `json:"consent"`
+}
+
+// ExportUserData collects all personal data for a user.
+func (s *Store) ExportUserData(ctx context.Context, userID int64) (*DataExport, error) {
+	export := &DataExport{}
+
+	user, err := s.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	export.User = *user
+
+	sessions, err := s.db.QueryContext(ctx, `
+SELECT id, user_id, refresh_token_hash, user_agent, ip, expires_at, created_at
+FROM sessions WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer sessions.Close()
+	for sessions.Next() {
+		var sess models.Session
+		if err := sessions.Scan(&sess.ID, &sess.UserID, &sess.RefreshHash, &sess.UserAgent, &sess.IP, &sess.ExpiresAt, &sess.CreatedAt); err != nil {
+			return nil, err
+		}
+		export.Sessions = append(export.Sessions, sess)
+	}
+
+	sub, err := s.GetUserSubscription(ctx, userID)
+	if err == nil {
+		export.Subscription = sub
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, referrer_id, referred_id, status, reward_days, created_at, completed_at
+FROM referrals WHERE referrer_id = $1 OR referred_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r models.Referral
+		if err := rows.Scan(&r.ID, &r.ReferrerID, &r.ReferredID, &r.Status, &r.RewardDays, &r.CreatedAt, &r.CompletedAt); err != nil {
+			return nil, err
+		}
+		export.Referrals = append(export.Referrals, r)
+	}
+
+	prows, err := s.db.QueryContext(ctx, `
+SELECT id, user_id, plan_id, status, amount_minor, currency, created_at, updated_at
+FROM payments WHERE user_id = $1 ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer prows.Close()
+	for prows.Next() {
+		var p models.PaymentRow
+		if err := prows.Scan(&p.ID, &p.UserID, &p.PlanID, &p.Status, &p.AmountMinor, &p.Currency, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		export.Payments = append(export.Payments, p)
+	}
+
+	export.Consent, _ = s.GetConsentRecords(ctx, userID)
+
+	return export, nil
+}

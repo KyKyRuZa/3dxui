@@ -68,8 +68,67 @@
 
 .actions {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-top: 4px;
+}
+
+.btnSecondary {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.btnSecondary:hover {
+  border-color: var(--color-primary);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnDanger {
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-danger);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btnDanger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.btnDanger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm {
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  border-radius: var(--radius-sm);
+}
+
+.confirm p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.confirmActions {
+  display: flex;
+  gap: 8px;
 }
 
 .error {

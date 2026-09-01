@@ -65,6 +65,9 @@ describe("AuthForm", () => {
     );
 
     renderAuthForm();
+    // Check consent checkbox first
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.click(checkbox);
     const btn = screen.getByText("Войти через Telegram");
     fireEvent.click(btn);
 
@@ -79,6 +82,9 @@ describe("AuthForm", () => {
     );
 
     renderAuthForm();
+    // Check consent checkbox first
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.click(checkbox);
     fireEvent.click(screen.getByText("Войти через Telegram"));
 
     await waitFor(() => {
@@ -92,10 +98,22 @@ describe("AuthForm", () => {
     );
 
     renderAuthForm();
+    // Check consent checkbox first
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.click(checkbox);
     fireEvent.click(screen.getByText("Войти через Telegram"));
 
     await waitFor(() => {
       expect(screen.getByText(/Не удалось создать ссылку для входа/)).toBeDefined();
+    });
+  });
+
+  it("shows error when consent not given", async () => {
+    renderAuthForm();
+    fireEvent.click(screen.getByText("Войти через Telegram"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/необходимо согласие/)).toBeDefined();
     });
   });
 });

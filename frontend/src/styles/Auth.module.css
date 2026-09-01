@@ -104,3 +104,23 @@
   font-size: 13px;
   min-height: 18px;
 }
+
+.consent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--color-muted);
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.consent input {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.consent a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}

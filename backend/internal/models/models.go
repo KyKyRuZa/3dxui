@@ -120,3 +120,14 @@ func (u User) Public() PublicProfile {
 		CreatedAt: u.CreatedAt,
 	}
 }
+
+// ConsentRecord tracks a user's consent to personal data processing (152-FZ).
+type ConsentRecord struct {
+	ID           int64        `db:"id" json:"id"`
+	UserID       int64        `db:"user_id" json:"user_id"`
+	ConsentType  string       `db:"consent_type" json:"consent_type"`
+	ConsentHash  string       `db:"consent_hash" json:"consent_hash"`
+	IP           string       `db:"ip" json:"ip"`
+	CreatedAt    time.Time    `db:"created_at" json:"created_at"`
+	RevokedAt    sql.NullTime `db:"revoked_at" json:"revoked_at"`
+}

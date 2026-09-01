@@ -156,6 +156,24 @@ CREATE TABLE IF NOT EXISTS telegram_login_tokens (
 	claimed_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_telegram_login_tokens_expire ON telegram_login_tokens (expires_at);
+
+-- Consent records for 152-FZ compliance. Tracks user consent to personal data
+-- processing including timestamp, IP, and consent text hash.
+CREATE TABLE IF NOT EXISTS consent_records (
+	id            BIGSERIAL PRIMARY KEY,
+	user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	consent_type  TEXT NOT NULL DEFAULT 'privacy_policy',
+	consent_hash  TEXT NOT NULL,
+	ip            TEXT,
+	created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	revoked_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_consent_records_user ON consent_records(user_id);
+
+-- Data retention tracking: marks users for automated cleanup.
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS cleanup_after TIMESTAMPTZ;
+ALTER TABLE bot_notifications ADD COLUMN IF NOT EXISTS cleanup_after TIMESTAMPTZ;
+ALTER TABLE renewal_notifications ADD COLUMN IF NOT EXISTS cleanup_after TIMESTAMPTZ;
 `
 	if _, err := db.ExecContext(context.Background(), schema); err != nil {
 		return fmt.Errorf("migrate: %w", err)

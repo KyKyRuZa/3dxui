@@ -104,6 +104,15 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		{
 			ref.GET("/", h.webReferral)
 		}
+
+		// User data management endpoints (152-FZ compliance)
+		user := api.Group("/user")
+		user.Use(middleware.AuthRequired(h.jwt))
+		{
+			user.GET("/data-export", h.dataExport)
+			user.DELETE("/", h.deleteUser)
+			user.POST("/consent", h.recordConsent)
+		}
 	}
 }
 

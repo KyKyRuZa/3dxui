@@ -8,20 +8,34 @@ import buttonStyles from "@styles/Button.module.css";
 import styles from "@styles/Auth.module.css";
 
 interface LinkResponse {
-  token: string;
-  login_url: string;
-  expires_in: number;
+	token: string;
+	login_url: string;
+	expires_in: number;
+}
+
+// Generates a simple hash of the consent text for the given timestamp.
+function generateConsentHash(timestamp: number): string {
+	const text = `privacy_policy_v1_${timestamp}`;
+	let hash = 0;
+	for (let i = 0; i < text.length; i++) {
+		const char = text.charCodeAt(i);
+		hash = ((hash << 5) - hash) + char;
+		hash = hash & hash;
+	}
+	return Math.abs(hash).toString(16);
 }
 
 export default function AuthForm() {
-  const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [error, setError] = useState("");
-  const [status, setStatus] = useState<"idle" | "waiting" | "linking">("idle");
-  const [loginUrl, setLoginUrl] = useState<string | null>(null);
-  const [botUsername, setBotUsername] = useState("AutoColorsBot");
-  const tokenRef = useRef<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+	const navigate = useNavigate();
+	const { isAuthenticated } = useAuth();
+	const [error, setError] = useState("");
+	const [status, setStatus] = useState<"idle" | "waiting" | "linking">("idle");
+	const [loginUrl, setLoginUrl] = useState<string | null>(null);
+	const [botUsername, setBotUsername] = useState("AutoColorsBot");
+	const [consent, setConsent] = useState(false);
+	const [consentTimestamp, setConsentTimestamp] = useState<number>(0);
+	const tokenRef = useRef<string | null>(null);
+	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) navigate("/dashboard");
@@ -47,9 +61,14 @@ export default function AuthForm() {
   };
 
   const startLink = async () => {
+    if (!consent) {
+      setError("Для продолжения необходимо согласие на обработку персональных данных.");
+      return;
+    }
     setError("");
     setStatus("linking");
     try {
+      const consentHash = generateConsentHash(consentTimestamp || Date.now());
       const res = await fetch("/api/auth/telegram/link", { method: "POST" });
       if (!res.ok) throw new Error("link failed");
       const data: LinkResponse = await res.json();
@@ -105,14 +124,35 @@ export default function AuthForm() {
         </p>
 
         {!loginUrl && (
-          <Button
-            variant="primary"
-            block
-            loading={status === "linking"}
-            onClick={startLink}
-          >
-            Войти через Telegram
-          </Button>
+          <>
+            <label className={styles.consent}>
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => {
+                  setConsent(e.target.checked);
+                  if (e.target.checked) {
+                    setConsentTimestamp(Date.now());
+                  }
+                }}
+              />
+              <span>
+                Я согласен с{" "}
+                <a href="/privacy" target="_blank" rel="noreferrer">
+                  Политикой конфиденциальности
+                </a>{" "}
+                и даю согласие на обработку персональных данных
+              </span>
+            </label>
+            <Button
+              variant="primary"
+              block
+              loading={status === "linking"}
+              onClick={startLink}
+            >
+              Войти через Telegram
+            </Button>
+          </>
         )}
 
         {loginUrl && (

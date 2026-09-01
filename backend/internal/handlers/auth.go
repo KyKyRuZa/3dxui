@@ -110,7 +110,8 @@ func (h *Handler) issueSession(c *gin.Context, user *models.User) {
 // initData. A new user is auto-created (username tg_<id>) on first sign-in.
 func (h *Handler) telegram(c *gin.Context) {
 	var body struct {
-		InitData string `json:"init_data"`
+		InitData    string `json:"init_data"`
+		ConsentHash string `json:"consent_hash"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.InitData == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -145,6 +146,11 @@ func (h *Handler) telegram(c *gin.Context) {
 		if err := h.store.SetTelegramID(ctx, user.ID, userID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
+		}
+		// Record consent for new users (152-FZ).
+		if body.ConsentHash != "" {
+			ip := c.ClientIP()
+			_ = h.store.RecordConsent(ctx, user.ID, "privacy_policy", body.ConsentHash, ip)
 		}
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -316,4 +322,70 @@ func (h *Handler) clearRefreshCookie(c *gin.Context) {
 		SameSite: http.SameSiteStrictMode,
 	}
 	http.SetCookie(c.Writer, cookie)
+}
+
+// dataExport returns all personal data for the authenticated user (152-FZ right of access).
+func (h *Handler) dataExport(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	ctx := c.Request.Context()
+	data, err := h.store.ExportUserData(ctx, userID)
+	if err != nil {
+		h.log.Errorw("dataExport: error", "userID", maskInt(userID), "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
+// deleteUser permanently removes the authenticated user and all associated data (152-FZ right to erasure).
+func (h *Handler) deleteUser(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	ctx := c.Request.Context()
+	if err := h.store.DeleteUser(ctx, userID); err != nil {
+		h.log.Errorw("deleteUser: error", "userID", maskInt(userID), "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	h.clearRefreshCookie(c)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// recordConsent records the user's consent to personal data processing (152-FZ).
+func (h *Handler) recordConsent(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	var body struct {
+		ConsentType string `json:"consent_type"`
+		ConsentHash string `json:"consent_hash"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+	if body.ConsentType == "" {
+		body.ConsentType = "privacy_policy"
+	}
+	if body.ConsentHash == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "consent_hash required"})
+		return
+	}
+	ctx := c.Request.Context()
+	ip := c.ClientIP()
+	if err := h.store.RecordConsent(ctx, userID, body.ConsentType, body.ConsentHash, ip); err != nil {
+		h.log.Errorw("recordConsent: error", "userID", maskInt(userID), "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

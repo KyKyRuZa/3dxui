@@ -27,9 +27,13 @@ export async function getProfile(): Promise<User> {
   return data;
 }
 
-export async function telegram(initData: string): Promise<AuthResponse> {
-  const { data } = await api.post<AuthResponse>("/auth/telegram", { init_data: initData });
-  return data;
+export async function telegram(initData: string, consentHash?: string): Promise<AuthResponse> {
+	const body: Record<string, string> = { init_data: initData };
+	if (consentHash) {
+		body.consent_hash = consentHash;
+	}
+	const { data } = await api.post<AuthResponse>("/auth/telegram", body);
+	return data;
 }
 
 export interface TelegramWidgetUser {
