@@ -144,7 +144,10 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	if body.ReferralCode != "" {
 		if referrer, rerr := h.store.GetUserByReferralCode(ctx, body.ReferralCode); rerr == nil && referrer.ID != user.ID {
 			if _, gerr := h.store.GetReferral(ctx, referrer.ID, user.ID); errors.Is(gerr, store.ErrNotFound) {
-				if cerr := h.store.CreateReferral(ctx, referrer.ID, user.ID, h.cfg.ReferralRewardDays); cerr == nil {
+				created, cerr := h.store.CreateReferral(ctx, referrer.ID, user.ID, h.cfg.ReferralRewardDays)
+				if cerr != nil {
+					h.log.Errorw("botEnsureUser: create referral error", "referrerID", referrer.ID, "referredID", user.ID, "error", cerr)
+				} else if created {
 					h.applyReferralSignupBonus(ctx, sub)
 					// Notify the referrer that a friend joined via their link.
 					if referrer.TelegramID.Valid && referrer.TelegramID.Int64 != 0 {
@@ -251,7 +254,12 @@ func (h *Handler) renewSubscription(ctx context.Context, sub *models.Subscriptio
 			_ = h.store.UpdateSubscriptionSubID(ctx, sub.ID, subID)
 		}
 	}
-	expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
+	// Extend from current expiry if still valid, otherwise from now.
+	base := time.Now()
+	if sub.ExpiresAt.Valid && sub.ExpiresAt.Time.After(base) {
+		base = sub.ExpiresAt.Time
+	}
+	expiryMs := base.AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 	if err := h.panel.UpdateClient(ctx, sub.PanelEmail, subID, expiryMs, h.cfg.DefaultInboundIDs); err != nil {
 		return err
 	}
@@ -447,11 +455,18 @@ func (h *Handler) botExpiring(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }
 
-// botExpired returns subscriptions that just expired (last 24h) and have not
-// been notified about the expiry yet, marking them notified for today.
+// botExpired returns subscriptions that expired within the given window
+// (default 24h, configurable via `hours` query param) and have not been
+// notified about the expiry yet, marking them notified for today.
 func (h *Handler) botExpired(c *gin.Context) {
 	ctx := c.Request.Context()
-	since := time.Now().Add(-24 * time.Hour)
+	hours := 24
+	if h := c.Query("hours"); h != "" {
+		if parsed, err := strconv.Atoi(h); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+	since := time.Now().Add(-time.Duration(hours) * time.Hour)
 	items, err := h.store.GetExpiredSubscriptions(ctx, since)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -507,33 +522,26 @@ func (h *Handler) botRenewed(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"users": users})
 }
 
-// botNotifications returns generic pending bot notifications (referral
-// signups/rewards, payment failures, etc.) and marks them as delivered so the
-// loop does not re-send the same event.
+// botNotifications atomically claims and returns generic pending bot
+// notifications (referral signups/rewards, payment failures, etc.), marking
+// them as delivered so the loop does not re-send the same event. Atomic claim
+// prevents duplicate sends when multiple bot instances poll simultaneously.
 func (h *Handler) botNotifications(c *gin.Context) {
 	ctx := c.Request.Context()
-	items, err := h.store.GetPendingBotNotifications(ctx)
+	items, err := h.store.ClaimBotNotifications(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 
-	ids := make([]int64, 0, len(items))
 	notifs := make([]gin.H, 0, len(items))
 	for _, it := range items {
-		ids = append(ids, it.ID)
 		notifs = append(notifs, gin.H{
 			"id":          it.ID,
 			"telegram_id": it.TelegramID,
 			"kind":        it.Kind,
 			"data":        it.Data,
 		})
-	}
-
-	if len(ids) > 0 {
-		if err := h.store.MarkBotNotificationsNotified(ctx, ids); err != nil {
-			h.log.Errorw("botNotifications: mark notified error", "error", err)
-		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"notifications": notifs})

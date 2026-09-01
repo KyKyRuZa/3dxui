@@ -13,6 +13,7 @@ import (
 
 // ValidateTelegramInitData verifies the `initData` query string sent by Telegram
 // WebApp. It returns the Telegram user ID and username on success.
+// It also validates auth_date to prevent replay attacks (max age 24 hours).
 func ValidateTelegramInitData(initData, botToken string) (userID int64, username string, err error) {
 	values, err := url.ParseQuery(initData)
 	if err != nil {
@@ -22,6 +23,18 @@ func ValidateTelegramInitData(initData, botToken string) (userID int64, username
 	hash := values.Get("hash")
 	if hash == "" {
 		return 0, "", fmt.Errorf("missing hash")
+	}
+
+	// Replay protection: reject initData that is too old (max 24 hours).
+	if authDateStr := values.Get("auth_date"); authDateStr != "" {
+		authDate, perr := parseInt64(authDateStr)
+		if perr != nil {
+			return 0, "", fmt.Errorf("invalid auth_date: %w", perr)
+		}
+		age := nowSeconds() - authDate
+		if age < 0 || age > 86400 {
+			return 0, "", fmt.Errorf("stale auth_date")
+		}
 	}
 
 	dataCheckParts := make([]string, 0, len(values))
@@ -41,7 +54,10 @@ func ValidateTelegramInitData(initData, botToken string) (userID int64, username
 		return 0, "", fmt.Errorf("invalid hash")
 	}
 
-	userID = parseInt64(values.Get("user.id"))
+	userID, perr := parseInt64(values.Get("user.id"))
+	if perr != nil {
+		return 0, "", fmt.Errorf("invalid user.id: %w", perr)
+	}
 	username = values.Get("user.username")
 	if username == "" {
 		username = values.Get("user.first_name")
@@ -118,8 +134,11 @@ func hmacSHA256(key, msg []byte) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func parseInt64(s string) int64 {
+func parseInt64(s string) (int64, error) {
 	var n int64
-	fmt.Sscanf(s, "%d", &n)
-	return n
+	_, err := fmt.Sscanf(s, "%d", &n)
+	if err != nil {
+		return 0, fmt.Errorf("invalid int64 %q: %w", s, err)
+	}
+	return n, nil
 }

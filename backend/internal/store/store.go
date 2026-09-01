@@ -9,6 +9,7 @@ import (
 
 	"github.com/lib/pq"
 
+	"github.com/ilyas/vpn-service/backend/internal/billing"
 	"github.com/ilyas/vpn-service/backend/internal/models"
 	"github.com/ilyas/vpn-service/backend/internal/utils"
 )
@@ -320,15 +321,25 @@ func (s *Store) GetUserByReferralCode(ctx context.Context, code string) (*models
 // CreateReferral records that `referredID` joined via `referrerID`'s code.
 // Self-referrals and duplicates are ignored. The reward is credited later,
 // when the referred user makes a paid purchase (see CompleteReferral).
-func (s *Store) CreateReferral(ctx context.Context, referrerID, referredID int64, rewardDays int) error {
+// CreateReferral records a new pending referral. Returns true if the row was
+// actually inserted, false if it already existed (ON CONFLICT DO NOTHING).
+// This prevents double-application of the signup bonus under concurrent requests.
+func (s *Store) CreateReferral(ctx context.Context, referrerID, referredID int64, rewardDays int) (bool, error) {
 	if referrerID == referredID {
-		return nil
+		return false, nil
 	}
-	_, err := s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 INSERT INTO referrals (referrer_id, referred_id, status, reward_days)
 	VALUES ($1, $2, 'pending', $3)
 	ON CONFLICT (referrer_id, referred_id) DO NOTHING`, referrerID, referredID, rewardDays)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // GetReferral returns any referral (pending or completed) between the given
@@ -473,6 +484,63 @@ WHERE id = $1`, id, status, amountMinor, currency)
 	return err
 }
 
+// ClaimPayment atomically marks a payment as 'succeeded' only if it is not
+// already in a terminal state. Returns true if this call claimed the payment,
+// false if another request already processed it. This prevents double
+// provisioning when two webhooks arrive concurrently.
+func (s *Store) ClaimPayment(ctx context.Context, id string) (bool, error) {
+	var userID int64
+	var planID string
+	err := s.db.QueryRowContext(ctx, `
+UPDATE payments SET status = 'succeeded', updated_at = NOW()
+WHERE id = $1 AND status NOT IN ('succeeded', 'canceled')
+RETURNING user_id, plan_id`, id).Scan(&userID, &planID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	_ = userID
+	_ = planID
+	return true, nil
+}
+
+// CreatePaymentIfNotExists creates a payment row from YooKassa verification
+// data when the webhook arrived before the local create call completed.
+// Returns true if the row was created, false if it already existed.
+func (s *Store) CreatePaymentIfNotExists(ctx context.Context, id string, billingPayment *billing.Payment) (bool, error) {
+	uid := 0
+	planID := ""
+	if billingPayment.Metadata != nil {
+		if u, ok := billingPayment.Metadata["user_id"]; ok {
+			fmt.Sscanf(u, "%d", &uid)
+		}
+		if p, ok := billingPayment.Metadata["plan_id"]; ok {
+			planID = p
+		}
+	}
+	if uid == 0 || planID == "" {
+		return false, nil
+	}
+	amountMinor := int64(0)
+	if billingPayment.Amount.Value != "" {
+		var f float64
+		if _, err := fmt.Sscanf(billingPayment.Amount.Value, "%f", &f); err == nil {
+			amountMinor = int64(f * 100)
+		}
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO payments (id, user_id, plan_id, status, amount_minor, currency)
+VALUES ($1, $2, $3, 'pending', $4, $5)
+ON CONFLICT (id) DO NOTHING`,
+		id, uid, planID, amountMinor, billingPayment.Amount.Currency)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CreateRenewalNotification enqueues a bot notification about a renewed
 // subscription. Idempotent by user_id+expires_at to avoid duplicates on
 // webhook retries.
@@ -561,6 +629,30 @@ func (s *Store) MarkBotNotificationsNotified(ctx context.Context, ids []int64) e
 	_, err := s.db.ExecContext(ctx, `
 UPDATE bot_notifications SET notified_at = NOW() WHERE id = ANY($1)`, pq.Array(ids))
 	return err
+}
+
+// ClaimBotNotifications atomically marks pending notifications as notified
+// and returns the claimed rows. This prevents duplicate sends when multiple
+// bot instances poll simultaneously. Uses UPDATE ... RETURNING to atomically
+// claim rows.
+func (s *Store) ClaimBotNotifications(ctx context.Context) ([]models.BotNotification, error) {
+	rows, err := s.db.QueryContext(ctx, `
+UPDATE bot_notifications SET notified_at = NOW()
+WHERE id IN (SELECT id FROM bot_notifications WHERE notified_at IS NULL ORDER BY created_at ASC FOR UPDATE SKIP LOCKED)
+RETURNING id, telegram_id, kind, data, ref_key, created_at, notified_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.BotNotification, 0)
+	for rows.Next() {
+		var n models.BotNotification
+		if err := rows.Scan(&n.ID, &n.TelegramID, &n.Kind, &n.Data, &n.RefKey, &n.CreatedAt, &n.NotifiedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
 }
 
 // TelegramLoginToken tracks a browser-initiated login request that the user

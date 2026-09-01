@@ -48,11 +48,34 @@ func newMockPanelServer(t *testing.T) *httptest.Server {
 	}))
 }
 
-func newBillingTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock) {
+func newMockYookassaServer(t *testing.T, paymentID, status string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/payments/"+paymentID {
+			resp := map[string]any{
+				"id":     paymentID,
+				"status": status,
+				"amount": map[string]any{"value": "299.00", "currency": "RUB"},
+				"metadata": map[string]any{
+					"user_id": "1",
+					"plan_id": "standard",
+				},
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+}
+
+func newBillingTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock, *httptest.Server) {
 	t.Helper()
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	require.NoError(t, err)
 	st := store.New(db)
+
+	srv := newMockYookassaServer(t, "pay_123", "succeeded")
 
 	cfg := &config.Config{
 		DefaultSubscriptionDays: 2,
@@ -67,7 +90,7 @@ func newBillingTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock) {
 		YookassaShopID:          "1268375",
 		YookassaSecretKey:       "test_secret",
 		YookassaReturnURL:       "https://example.com/return",
-		YookassaAPIURL:          "https://api.yookassa.ru/v3",
+		YookassaAPIURL:          srv.URL,
 		BotUsername:             "AutoColorsBot",
 	}
 
@@ -78,7 +101,7 @@ func newBillingTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock) {
 	billingClient := billing.New(cfg.YookassaShopID, cfg.YookassaSecretKey, cfg.YookassaAPIURL)
 
 	h := NewHandler(st, tokenSvc, cfg, nil, billingClient, log.Sugar())
-	return h, mock
+	return h, mock, srv
 }
 
 func newProvisionTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock, *httptest.Server) {
@@ -109,12 +132,17 @@ func newTestTokenServiceAuth(t *testing.T) (*auth.TokenService, error) {
 }
 
 func TestBillingWebhook_PaymentSucceeded_Idempotent(t *testing.T) {
-	h, mock := newBillingTestHandler(t)
+	h, mock, _ := newBillingTestHandler(t)
 
-	mock.ExpectQuery("SELECT id, user_id, plan_id, status, amount_minor, currency, created_at, updated_at FROM payments WHERE id = .*").
+	// CreatePaymentIfNotExists: payment row already exists → ON CONFLICT DO NOTHING → 0 rows
+	mock.ExpectExec("INSERT INTO payments.*ON CONFLICT.*DO NOTHING").
+		WithArgs("pay_123", int64(1), "standard", int64(29900), "RUB").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	// ClaimPayment: payment already 'succeeded' → WHERE status NOT IN ('succeeded','canceled') → 0 rows
+	mock.ExpectQuery("UPDATE payments SET status").
 		WithArgs("pay_123").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "plan_id", "status", "amount_minor", "currency", "created_at", "updated_at"}).
-			AddRow("pay_123", 1, "standard", "succeeded", int64(29900), "RUB", time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "plan_id"}))
 
 	payload := `{"event":"payment.succeeded","object":{"id":"pay_123","status":"succeeded"}}`
 	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))
@@ -129,7 +157,7 @@ func TestBillingWebhook_PaymentSucceeded_Idempotent(t *testing.T) {
 }
 
 func TestBillingWebhook_PaymentCanceled(t *testing.T) {
-	h, mock := newBillingTestHandler(t)
+	h, mock, _ := newBillingTestHandler(t)
 
 	mock.ExpectExec("UPDATE payments SET status = .*, updated_at = NOW.*WHERE id = .*").
 		WithArgs("pay_456", "canceled").
@@ -161,7 +189,7 @@ func TestBillingWebhook_PaymentCanceled(t *testing.T) {
 }
 
 func TestBillingWebhook_InvalidPayload(t *testing.T) {
-	h, _ := newBillingTestHandler(t)
+	h, _, _ := newBillingTestHandler(t)
 
 	payload := `{"event":""}`
 	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))
@@ -175,7 +203,7 @@ func TestBillingWebhook_InvalidPayload(t *testing.T) {
 }
 
 func TestBillingWebhook_MalformedJSON(t *testing.T) {
-	h, _ := newBillingTestHandler(t)
+	h, _, _ := newBillingTestHandler(t)
 
 	payload := `not-json`
 	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))
@@ -188,7 +216,7 @@ func TestBillingWebhook_MalformedJSON(t *testing.T) {
 }
 
 func TestBillingWebhook_MissingPaymentID(t *testing.T) {
-	h, _ := newBillingTestHandler(t)
+	h, _, _ := newBillingTestHandler(t)
 
 	payload := `{"event":"payment.succeeded","object":{"id":"","status":"succeeded"}}`
 	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))
@@ -201,7 +229,7 @@ func TestBillingWebhook_MissingPaymentID(t *testing.T) {
 }
 
 func TestBillingWebhook_IgnoreNonSucceededEvent(t *testing.T) {
-	h, _ := newBillingTestHandler(t)
+	h, _, _ := newBillingTestHandler(t)
 
 	payload := `{"event":"payment.waiting_for_capture","object":{"id":"pay_789","status":"waiting_for_capture"}}`
 	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -27,15 +29,20 @@ type Client struct {
 }
 
 func New(baseURL, username, password, apiToken string, log *zap.SugaredLogger) *Client {
+	// Secure by default: TLS verification is enabled unless explicitly disabled
+	// via PANEL_INSECURE_SKIP_VERIFY=true (useful for self-signed certs in dev).
+	insecure := os.Getenv("PANEL_INSECURE_SKIP_VERIFY") == "true"
 	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 	}
+	// Use a cookie jar for username/password auth to persist session cookies.
+	jar, _ := cookiejar.New(nil)
 	return &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		username:   username,
 		password:   password,
 		apiToken:   apiToken,
-		httpClient: &http.Client{Transport: tr, Timeout: 15 * time.Minute},
+		httpClient: &http.Client{Transport: tr, Timeout: 15 * time.Minute, Jar: jar},
 		log:        log,
 	}
 }

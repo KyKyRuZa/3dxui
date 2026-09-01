@@ -142,9 +142,6 @@ func Load() (*Config, error) {
 	if cfg.RedisURL == "" {
 		missing = append(missing, "REDIS_URL")
 	}
-	if cfg.JWTSecret == "" {
-		missing = append(missing, "JWT_SECRET")
-	}
 	if cfg.BotToken == "" {
 		missing = append(missing, "BOT_TOKEN")
 	}

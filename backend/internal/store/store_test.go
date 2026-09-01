@@ -99,6 +99,37 @@ func TestMarkBotNotificationsNotified_Empty(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestClaimBotNotifications(t *testing.T) {
+	store, mock := newTestStore(t)
+	ctx := context.Background()
+	now := time.Now()
+
+	mock.ExpectQuery("UPDATE bot_notifications SET notified_at = NOW").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "telegram_id", "kind", "data", "ref_key", "created_at", "notified_at"}).
+			AddRow(1, 699469085, "referral_signup", []byte(`{"friend_name":"Test"}`), "signup:1:2", now, now).
+			AddRow(2, 699469085, "payment_failed", []byte(`{}`), "payfail:pay_123", now, now))
+
+	items, err := store.ClaimBotNotifications(ctx)
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	assert.Equal(t, "referral_signup", items[0].Kind)
+	assert.Equal(t, "payment_failed", items[1].Kind)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestClaimBotNotifications_Empty(t *testing.T) {
+	store, mock := newTestStore(t)
+	ctx := context.Background()
+
+	mock.ExpectQuery("UPDATE bot_notifications SET notified_at = NOW").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "telegram_id", "kind", "data", "ref_key", "created_at", "notified_at"}))
+
+	items, err := store.ClaimBotNotifications(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestCreateLoginToken(t *testing.T) {
 	store, mock := newTestStore(t)
 	ctx := context.Background()
@@ -419,8 +450,9 @@ func TestCreateReferral(t *testing.T) {
 		WithArgs(int64(1), int64(2), 7).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	err := store.CreateReferral(ctx, 1, 2, 7)
+	created, err := store.CreateReferral(ctx, 1, 2, 7)
 	assert.NoError(t, err)
+	assert.True(t, created)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -428,8 +460,9 @@ func TestCreateReferralSelfReferral(t *testing.T) {
 	store, _ := newTestStore(t)
 	ctx := context.Background()
 
-	err := store.CreateReferral(ctx, 1, 1, 7)
+	created, err := store.CreateReferral(ctx, 1, 1, 7)
 	assert.NoError(t, err)
+	assert.False(t, created)
 }
 
 func TestGetPendingReferral(t *testing.T) {

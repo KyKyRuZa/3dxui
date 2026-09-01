@@ -293,17 +293,27 @@ func userIDFromContext(c *gin.Context) (int64, bool) {
 }
 
 func (h *Handler) setRefreshCookie(c *gin.Context, raw string) {
-	c.SetCookie(
-		"refresh_token",
-		raw,
-		int(auth.RefreshTTL().Seconds()),
-		"/api/auth",
-		"",
-		h.cfg.IsProd(),
-		true,
-	)
+	cookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    raw,
+		MaxAge:   int(auth.RefreshTTL().Seconds()),
+		Path:     "/api/auth",
+		Secure:   h.cfg.IsProd(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
+	http.SetCookie(c.Writer, cookie)
 }
 
 func (h *Handler) clearRefreshCookie(c *gin.Context) {
-	c.SetCookie("refresh_token", "", -1, "/api/auth", "", h.cfg.IsProd(), true)
+	cookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/api/auth",
+		Secure:   h.cfg.IsProd(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	}
+	http.SetCookie(c.Writer, cookie)
 }

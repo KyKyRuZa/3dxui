@@ -138,13 +138,8 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// Idempotency: skip if we already activated this payment.
-	if local, lerr := h.store.GetPayment(ctx, payload.Object.ID); lerr == nil && local.Status == "succeeded" {
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-		return
-	}
-
-	// Re-fetch from the API to verify authenticity and status.
+	// Re-fetch from the API to verify authenticity and status BEFORE claiming.
+	// This avoids creating a local row for fake webhook events.
 	verified, err := h.billing.GetPayment(payload.Object.ID)
 	if err != nil {
 		h.log.Errorw("webhook: verify fetch error", "paymentID", maskStr(payload.Object.ID), "error", err)
@@ -152,6 +147,23 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 	if verified.Status != "succeeded" {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+
+	// Ensure a local payment row exists (handles webhook arriving before the
+	// local create call's DB write). Then atomically claim it for processing.
+	_, _ = h.store.CreatePaymentIfNotExists(ctx, payload.Object.ID, verified)
+
+	// Atomically claim this payment for processing. Returns false if another
+	// request already processed it (idempotency against concurrent webhooks).
+	claimed, err := h.store.ClaimPayment(ctx, payload.Object.ID)
+	if err != nil {
+		h.log.Errorw("webhook: claim payment error", "paymentID", maskStr(payload.Object.ID), "error", err)
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+	if !claimed {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
@@ -184,8 +196,8 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// Record the authoritative status and captured amount, then credit the
-	// referrer (no-op if there is no pending referral).
+	// Record the authoritative captured amount, then credit the referrer
+	// (no-op if there is no pending referral).
 	amountMinor := plan.PriceMinor
 	if gotMinor > 0 {
 		amountMinor = gotMinor

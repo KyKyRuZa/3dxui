@@ -58,14 +58,11 @@ func TestBotNotifications(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, telegram_id, kind, data, ref_key, created_at, notified_at FROM bot_notifications WHERE notified_at IS NULL ORDER BY created_at ASC").
+	// ClaimBotNotifications uses UPDATE ... RETURNING for atomic claim
+	mock.ExpectQuery("UPDATE bot_notifications SET notified_at = NOW").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "telegram_id", "kind", "data", "ref_key", "created_at", "notified_at"}).
-			AddRow(1, 699469085, "referral_signup", []byte(`{"friend_name":"Test"}`), "signup:1:2", now, nil).
-			AddRow(2, 699469085, "payment_failed", []byte(`{}`), "payfail:pay_123", now, nil))
-
-	mock.ExpectExec("UPDATE bot_notifications SET notified_at = NOW.*WHERE id = ANY.*").
-		WithArgs(pq.Array([]int64{1, 2})).
-		WillReturnResult(sqlmock.NewResult(1, 2))
+			AddRow(1, 699469085, "referral_signup", []byte(`{"friend_name":"Test"}`), "signup:1:2", now, now).
+			AddRow(2, 699469085, "payment_failed", []byte(`{}`), "payfail:pay_123", now, now))
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/bot/notifications/pending", nil)
 	req.Header.Set("X-Bot-Secret", "bot-secret")
@@ -82,7 +79,8 @@ func TestBotNotifications(t *testing.T) {
 func TestBotNotifications_Empty(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 
-	mock.ExpectQuery("SELECT id, telegram_id, kind, data, ref_key, created_at, notified_at FROM bot_notifications WHERE notified_at IS NULL ORDER BY created_at ASC").
+	// ClaimBotNotifications uses UPDATE ... RETURNING for atomic claim
+	mock.ExpectQuery("UPDATE bot_notifications SET notified_at = NOW").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "telegram_id", "kind", "data", "ref_key", "created_at", "notified_at"}))
 
 	req, _ := http.NewRequest(http.MethodGet, "/api/bot/notifications/pending", nil)
