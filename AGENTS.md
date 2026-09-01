@@ -12,18 +12,18 @@
 
 - Модуль бэкенда: `github.com/ilyas/vpn-service/backend` (исторически такое имя пакета).
 - Git-remote: `github.com/KyKyRuZa/3dxui` (ветка `master`).
-- Статус (на 2026-09-01): регистрация/вход на сайте — только через Telegram
-  (deep-link без email/password); универсальная очередь уведомлений `bot_notifications`
+- Статус (на 2026-09-01): регистрация/вход на сайте — по username/password или через Telegram
+  (deep-link или код); универсальная очередь уведомлений `bot_notifications`
   покрывает все сценарии бот↔сайт↔БД; баг атрибуции рефералов исправлен. Проверено
-  end-to-end: deep-link авторизация, уведомления о продлении/рефералах/оплате. Остаётся
-  тестовый запуск оплаты в тестовом магазине ЮKassa и CRUD тарифов.
+  end-to-end: deep-link авторизация, уведомления о продлении/рефералах/оплате, вход по коду.
+  Остаётся тестовый запуск оплаты в тестовом магазине ЮKassa и CRUD тарифов.
 
 ## 2. Архитектура (docker-compose)
 
 Сервисы в `docker-compose.yml`:
 - `3xui` — панель VPN (источник клиентов/ключей), `XUI_ENABLE_FAIL2BAN=true`.
 - `postgres` — БД (`vpn_user`/`vpn_db`, см. `.env`).
-- `redis` — подключён, но пока не используется активно.
+- `redis` — подключён, используется для verification codes (bind/login через Telegram).
 - `backend` — Go + Gin, порт `8080` (только `expose`, снаружи через nginx).
 - `frontend` — React + Vite + TS, собирается в статику, раздаётся nginx.
 - `nginx` — TLS-терминация, HSTS/CSP, rate-limit, прокси `/api` → backend.
@@ -31,7 +31,7 @@
 
 Ключевые каталоги бэкенда:
 - `internal/handlers/` — `handler.go` (роуты), `auth.go`, `bot.go`, `subscription.go`.
-- `internal/store/` — Postgres-доступ (`store.go`), модели в `internal/models/`.
+- `internal/store/` — Postgres-доступ (`store.go`), Redis-доступ (`store_redis.go`), модели в `internal/models/`.
 - `internal/panel/` — клиент к REST API 3x-ui (`client.go`).
 - `internal/db/` — подключение + миграции (`db.go`).
 - `internal/config/` — viper + env (`config.go`).
@@ -60,18 +60,12 @@
   «Последний день подписки!»), а `send_expired_notifications` (ранее НЕ был подключён к циклу)
   теперь тоже вызывается из `notification_loop` и шлёт навязчивую «купите ключ» рассылку
    ежедневно в течение 7 дней после истечения (`backend_expired(hours=168)`). Дедуп по
-   `last_expired_notify_date` (раз в сутки, переживает рестарт).
+  `last_expired_notify_date` (раз в сутки, переживает рестарт).
 - Во все pushy-сообщения (истечение, последний день, `/status`, `callback status`) добавлен
   **реферальный якорь**: «пригласите друга — получите +7 дней бесплатно» + готовая
   `t.me/AutoColorsBot?start=<code>` (ссылка подтягивается через `backend_referral`).
 - Фоновый цикл раз в `NOTIFY_INTERVAL` (по умолч. 3600с). Проверено на `tg_699469085`:
   `expires_at` = now+2д, уведомление приходит.
-- **Уведомления о продлении через сайт (проверено 2026-08-29):** таблица
-  `renewal_notifications` (user_id, telegram_id, expires_at, notified_at); после
-  успешного `provisionPlan` (webhook ЮKassa) пишется запись; бот poll'ит
-  `GET /api/bot/notifications/renewed` и шлёт «✅ Подписка продлена!». Дедуп по
-  `notified_at`. Эндпоинт защищён `BotRequired`. Проверено end-to-end на `tg_699469085`:
-  бот шлёт уведомление, в логах `sent 1 renewal notifications`.
 
 ### 3.3 Реферальная программа — ФУНДАМЕНТ ГОТОВ (без биллинга)
 - `users.referral_code` (уникальный; существующим юзерам backfill как `ref<id>`).
@@ -108,12 +102,6 @@
   `botGetUser`/`botReferral` отдавали 404 и бот «не обновлялся». Исправлено:
   `User.Email` → `sql.NullString`, `Public().Email` берёт `.String`. Аналогично уже
   были nullable-safe `panel_username`/`panel_uuid`/`referral_code`.
-- **Уведомления бота о продлении через сайт (добавлено 2026-08-29):** таблица
-  `renewal_notifications` (user_id, telegram_id, expires_at, notified_at); после
-  успешного `provisionPlan` (webhook ЮKassa) пишется запись; бот poll'ит
-  `GET /api/bot/notifications/renewed` и шлёт «✅ Подписка продлена!». Дедуп по
-  `notified_at`. Эндпоинт защищён `BotRequired`. Проверено end-to-end на `tg_699469085`:
-  бот шлёт уведомление, в логах `sent 1 renewal notifications`.
 - **Очистка логов**: последний `fmt.Println` в `internal/auth/jwt.go` заменён на
   `zap.SugaredLogger.Warn`; `NewTokenService` теперь принимает логгер из `cmd/main.go`.
   В бэкенде больше нет `fmt.Print*`; `log.Fatalf` в `main.go` остаются только на
@@ -150,72 +138,10 @@
   `provisionPlan` создаёт клиента в 3x-ui → `expires_at` = now+30 дней. Смена на
   боевой магазин — только `YOOKASSA_SHOP_ID` + `YOOKASSA_SECRET_KEY` в `.env` и
   `docker compose up -d --build backend`; код менять не нужно.
-- **Проверено сквозь веб-дашборд (2026-08-27, тестовый магазин `1268375`):** логин →
-  `GET /api/billing/plans` → `POST /api/billing/create` (открывает `confirmation_url`) →
-  webhook от IP ЮKassa `77.75.153.x` (`payment.succeeded`, 200) → `provisionPlan` продлевает
-  подписку; `GET /api/referral` и `GET /api/config` тоже отвечают 200. Путь веб-покупки рабочий.
 - **Фронт знает про тестовый магазин**: бэкенд отдаёт `GET /api/config`
   (`{yookassa_test_mode}`; `true`, если `YOOKASSA_SECRET_KEY` начинается с `test_` или
   `YOOKASSA_TEST_MODE=true`), и `PricingCards` показывает жёлтый бейдж «🧪 Тестовый режим
   оплаты». Кнопки «Купить» уже привязаны к ЮKassa через `/api/billing/create`.
-
-## 4. Что в планах (не сделано)
-
-1. **Перевод биллинга на боевой магазин ЮKassa**: сейчас используется тестовый
-   (`YOOKASSA_SHOP_ID=1268375`, ключ `test_...`). После одобрения магазина заменить
-   `YOOKASSA_SECRET_KEY` на боевой и проверить реальное списание.
-2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
-   но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
-3. **Админ-панель / управление планами** — опционально.
-4. **Тесты**: приложение не имеет комплексного unit/integration тестирования. Необходимо
-   добавить тесты для критической логики: авторизация (валидация init_data, токены deep-link),
-   реферальная программа (бонусы, атрибуция), уведомления (очередь, дедуп), биллинг
-   (webhook, проверка подписи). Технологии: Go — `testing` + `testify`, Python — `pytest`,
-   Frontend — `vitest` (уже настроен, есть примеры в `__tests__/`).
-7. **Обход DNS-блокировки сайта покупателями**: добавлена команда `/fix` и кнопка
-   «🔧 Починить доступ к сайту» в боте. Бот спрашивает ОС и отправляет готовые скрипты
-   `add_hosts_windows.bat` и `add_hosts_linux_macos.sh`, которые прописывают
-   `2.26.138.90 thenomoreblocks.com` в `/etc/hosts` и сбрасывают DNS-кэш. Скрипты лежат
-   в `bot/` и копируются в образ бота через Dockerfile. В инструкциях и статусных сообщениях
-   добавлена рекомендация: при проблемах с сайтом на WiFi — выполнить первоначальные действия
-   через мобильный хотспот (мобильный интернет), а потом вернуться на WiFi; туннель VPN
-   работает на любом соединении.
-8. **Соответствие 152-ФЗ**: реализован базовый функционал для соответствия Федеральному
-   закону № 152-ФЗ «О персональных данных»:
-   - Политика конфиденциальности: `frontend/src/pages/Privacy.tsx` (доступна по `/privacy`)
-   - Сбор согласия при регистрации: checkbox в `AuthForm.tsx` + запись в `consent_records`
-   - Экспорт данных: `GET /api/user/data-export` (все данные пользователя)
-   - Удаление аккаунта: `DELETE /api/user` (каскадное удаление всех данных)
-   - Cookie consent banner: `frontend/src/components/CookieConsent.tsx`
-   - Таблица `consent_records` для хранения записей о согласии
-   - Права субъекта: доступ к данным, удаление, отзыв согласия
-   - **TODO**: необходимо назначить ответственного за обработку ПД и опубликовать контакты
-
-## 5. Как запускать и проверять
-
-```bash
-cp .env.example .env        # заполнить BOT_TOKEN, BOT_API_SECRET, DATABASE_URL, REDIS_URL,
-                            # PANEL_URL/USERNAME/PASSWORD/API_TOKEN, DEFAULT_INBOUND_IDS
-docker compose up -d --build backend bot
-```
-
-Проверка выдачи ключа ботом (изнутри сети контейнеров):
-```bash
-docker compose exec backend sh -c 'wget -qO- --post-data="{\"telegram_id\":12345,\"first_name\":\"Test\"}" \
-  --header="X-Bot-Secret: $BOT_API_SECRET" --header="Content-Type: application/json" \
-  http://localhost:8080/api/bot/user'
-```
-
-Проверка уведомлений (БД):
-```bash
-docker compose exec postgres psql -U vpn_user -d vpn_db \
-  -c "SELECT panel_email, expires_at, last_expiry_notify_date FROM subscriptions WHERE panel_email='tg_699469085';"
-```
-Тест в Telegram: `/buy` → `/notify` (или дождаться фонового цикла) → приходит напоминание.
-
-Рефералы (тест без ЮKassa): у реферера `/referral` → ссылка; с другого аккаунта открыть
-`https://t.me/AutoColorsBot?start=<code>` → `/buy` → новому юзеру +2 дня, у реферера
-счётчик «Приглашено» +1. Вознаграждение рефереру (+7 дней) — только после платежа.
 
 ### 3.6 Уведомления бота — ВСЕ сценарии (актуально 2026-08-31)
 
@@ -248,30 +174,32 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 Добавить новый сценарий = положить строку в `bot_notifications` + добавить ветку в
 `render_bot_notification` (`bot/main.py`); эндпоинт и цикл уже всё разберут.
 
-### 3.7 Аутентификация только через Telegram (2026-08-31)
+### 3.7 Аутентификация — username/password + Telegram (2026-09-01)
 
-- Удалён email/password: эндпоинты `POST /api/auth/register`, `POST /api/auth/login`,
-  `PATCH /api/auth/profile` (email), `POST /api/auth/password` убраны. Регистрация и вход —
-  **только** через `POST /api/auth/telegram` (валидация подписи `init_data` Telegram WebApp,
-  `auth.ValidateTelegramInitData`). Новый юзер создаётся автоматически (`username = tg_<id>`).
-- `users.password_hash` остаётся `NOT NULL` в схеме, но для Telegram-аккаунтов хранит
-  случайный placeholder (не используется для входа — логин только по `init_data`).
-- Фронт: `/login` и `/register` рендерят `AuthForm` (кнопка «Войти через Telegram»);
-  при открытии сайта как Mini App `window.Telegram.WebApp.initData` авто-логинит
-  пользователя (см. `frontend/src/store/auth.tsx`). В обычном браузере `AuthForm` даёт
-  глубокую ссылку на бота (`https://t.me/<bot_username>`, `bot_username` из `GET /api/config`).
-- **Telegram Login через deep-link (браузер):** на `/login` и `/register`
-  кнопка «Войти через Telegram». Фронт запрашивает `POST /api/auth/telegram/link`
-  → получает `token` + `login_url` (`https://t.me/<bot>?start=<token>`) → открывает
-  бота. Бот в `cmd_start` вызывает `POST /api/bot/login-token/claim`, связывая токен с
-  Telegram-юзером. Фронт опрашивает `GET /api/auth/telegram/link/<token>` и после
-  подтверждения получает `access_token` → редижектит в `/dashboard`. Токены живут
-  5 минут, таблица `telegram_login_tokens`. Реферальные коды (короткие, < 16 символов)
-  по-прежнему запоминаются в `pending_refs` и применяются при `/buy`.
+- **Username/password**: добавлены `POST /api/auth/register` и `POST /api/auth/login`.
+  `users.password_hash` хранит реальный bcrypt-хеш (не placeholder).
+- **Telegram deep-link**: `POST /api/auth/telegram/link` → `GET /api/auth/telegram/link/<token>`.
+  Токены живут 5 минут, таблица `telegram_login_tokens`.
+- **Telegram code login**: пользователь отправляет `/link` боту → получает 8-значный код →
+  вводит на сайте. Коды хранятся в Redis с TTL 300с.
+- **Telegram bind**: авторизованный пользователь нажимает «Привязать Telegram» в Settings →
+  получает код → переходит в бота по ссылке `t.me/Bot?start=bind-XXXXXXXX`.
+- Фронт `AuthForm`: поля username/password + кнопка «Войти через Telegram» + ввод кода из бота.
 - **Telegram Login Widget** (`auth.VerifyTelegramWidget`, `POST /api/auth/telegram/widget`)
   был реализован, но ЗАМЕНЁН на deep-link (виджет требовал `/setdomain` у @BotFather и
   имел проблемы с CSP). Код виджета остался в кодовой базе как резервный — можно удалить,
   если не понадобится.
+
+### 3.8 Соответствие 152-ФЗ (2026-09-01)
+
+- Политика конфиденциальности: `frontend/src/pages/Privacy.tsx` (доступна по `/privacy`)
+- Сбор согласия при регистрации: checkbox в `AuthForm.tsx` + запись в `consent_records`
+- Экспорт данных: `GET /api/user/data-export` (все данные пользователя)
+- Удаление аккаунта: `DELETE /api/user` (каскадное удаление всех данных)
+- Cookie consent banner: `frontend/src/components/CookieConsent.tsx`
+- Таблица `consent_records` для хранения записей о согласии
+- Права субъекта: доступ к данным, удаление, отзыв согласия
+- **TODO**: необходимо назначить ответственного за обработку ПД и опубликовать контакты
 
 ## 4. Безопасность и исправления (актуально 2026-09-01)
 
@@ -285,8 +213,56 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - **SameSite cookie**: refresh token cookie теперь с `SameSite=Strict` (защита от CSRF).
 - **Панель аутентификация**: добавлен `cookiejar` для сохранения сессионных cookies.
 - **Дублирование уведомлений**: добавлен атомарный `ClaimBotNotifications` с `FOR UPDATE SKIP LOCKED`.
-- **parseInt64**: теперь возвращает ошибку вместо  silencе 0.
+- **parseInt64**: теперь возвращает ошибку вместо silencе 0.
 - **JWT_SECRET**: убран из required config (не используется, JWT работает на EC ключах).
+- **renewSubscription**: теперь продляет от текущего expiry, а не сбрасывает оставшиеся дни.
+- **Expired notifications**: параметр `hours` теперь парсится из query (было 24ч, бот вызывает 168ч).
+
+### 4.2 Тесты (2026-09-01)
+- **Backend**: 6 пакетов, ~80+ тестов (auth, jwt, middleware, handlers, billing, store, utils).
+- **Frontend**: 33 теста (AuthForm, PricingCards, authStore, Subscription, Referral).
+- **Bot**: 53 теста (notifications, referrals, login token, bind code, login code).
+- Все тесты проходят: `go test ./...`, `npm test -- --run`, `python3 -m pytest test_bot.py`.
+
+## 5. Как запускать и проверять
+
+```bash
+cp .env.example .env        # заполнить BOT_TOKEN, BOT_API_SECRET, DATABASE_URL, REDIS_URL,
+                            # PANEL_URL/USERNAME/PASSWORD/API_TOKEN, DEFAULT_INBOUND_IDS
+                            # JWT_PRIVATE_KEY (для постоянных сессий)
+docker compose up -d --build backend bot
+```
+
+Проверка выдачи ключа ботом (изнутри сети контейнеров):
+```bash
+docker compose exec backend sh -c 'wget -qO- --post-data="{\"telegram_id\":12345,\"first_name\":\"Test\"}" \
+  --header="X-Bot-Secret: $BOT_API_SECRET" --header="Content-Type: application/json" \
+  http://localhost:8080/api/bot/user'
+```
+
+Проверка уведомлений (БД):
+```bash
+docker compose exec postgres psql -U vpn_user -d vpn_db \
+  -c "SELECT panel_email, expires_at, last_expiry_notify_date FROM subscriptions WHERE panel_email='tg_699469085';"
+```
+Тест в Telegram: `/buy` → `/notify` (или дождаться фонового цикла) → приходит напоминание.
+
+Рефералы (тест без ЮKassa): у реферера `/referral` → ссылка; с другого аккаунта открыть
+`https://t.me/AutoColorsBot?start=<code>` → `/buy` → новому юзеру +2 дня, у реферера
+счётчик «Приглашено» +1. Вознаграждение рефереру (+7 дней) — только после платежа.
+
+Проверка verification codes:
+```bash
+# Генерация кода для входа
+curl -X POST https://thenomoreblocks.com/api/codes/login \
+  -H "Content-Type: application/json" \
+  -d '{"telegram_id": 699469085}'
+
+# Вход по коду
+curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
+  -H "Content-Type: application/json" \
+  -d '{"code": "16294059"}'
+```
 
 ## 6. Подводные камни (gotchas)
 
@@ -326,6 +302,8 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   и `rm` падал с `Resource busy`. Исправлено на `find /app/dist -mindepth 1 -delete`,
   что удаляет содержимое, но оставляет сам mount point. Если увидите в логах
   `rm: can't remove '/app/dist': Resource busy` — пересоберите frontend.
+- **Redis для verification codes**: коды хранятся в Redis с TTL 300с. Если Redis недоступен —
+  коды не генерируются (ошибка 500). Проверка: `docker compose exec redis redis-cli ping`.
 
 ## 7. Быстрый индекс файлов для правок
 
@@ -337,7 +315,8 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - Клиент 3x-ui (AddClient/GetClient/UpdateClient/Groups): `backend/internal/panel/client.go`
 - Миграции БД: `backend/internal/db/db.go`
 - Модели: `backend/internal/models/models.go`
-- Store-методы (включая рефералы/начисления/планы/платежи): `backend/internal/store/store.go`
+- Store-методы (Postgres): `backend/internal/store/store.go`
+- Store-методы (Redis codes): `backend/internal/store/store_redis.go`
 - Конфиг (дни подписки/уведомлений/рефералов/юкасса): `backend/internal/config/config.go`
 - Бот (aiogram): `bot/main.py`, `bot/add_hosts_windows.bat`, `bot/add_hosts_linux_macos.sh`
 - Аутентификация (deep-link + WebApp): `backend/internal/auth/telegram.go`, `backend/internal/handlers/auth.go`
@@ -349,3 +328,19 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   `frontend/src/styles/Referral.module.css`
 - Фронт (авторизация): `frontend/src/pages/AuthForm.tsx`, `frontend/src/api/auth.ts`,
   `frontend/src/store/auth.tsx`, `frontend/src/styles/Auth.module.css`
+- Фронт (политика/cookies/settings): `frontend/src/pages/Privacy.tsx`,
+  `frontend/src/components/CookieConsent.tsx`, `frontend/src/pages/Settings.tsx`,
+  `frontend/src/styles/Privacy.module.css`, `frontend/src/styles/CookieConsent.module.css`,
+  `frontend/src/styles/Settings.module.css`
+
+## 8. Что осталось сделать (TODO)
+
+1. **Перевод биллинга на боевой магазин ЮKassa**: сейчас используется тестовый
+   (`YOOKASSA_SHOP_ID=1268375`, ключ `test_...`). После одобрения магазина заменить
+   `YOOKASSA_SECRET_KEY` на боевой и проверить реальное списание.
+2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
+   но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
+3. **Админ-панель / управление планами** — опционально.
+4. **Назначить ответственного за обработку ПД** — требуется по 152-ФЗ, опубликовать контакты.
+5. **Договоры с третьими лицами (DPA)** — документировать передачу данных ЮKassa и Telegram.
+6. **Обход DNS-блокировки**: добавлена команда `/fix` и кнопка «🔧 Починить доступ к сайту» в боте.
