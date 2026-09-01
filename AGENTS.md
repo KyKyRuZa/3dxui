@@ -12,11 +12,11 @@
 
 - Модуль бэкенда: `github.com/ilyas/vpn-service/backend` (исторически такое имя пакета).
 - Git-remote: `github.com/KyKyRuZa/3dxui` (ветка `master`).
-- Статус (на 2026-08-29): бот снова стабильно видит пользователей и подписки, добавлен
-  механизм уведомлений бота о продлении через сайт. **Проверено end-to-end:** уведомления
-  о продлении (`/api/bot/notifications/renewed` → `send_renewal_notifications`) работают,
-  бот шлёт «✅ Подписка продлена!» в Telegram. Остаётся тестовый запуск оплаты в
-  тестовом магазине ЮKassa и CRUD тарифов.
+- Статус (на 2026-09-01): регистрация/вход на сайте — только через Telegram
+  (deep-link без email/password); универсальная очередь уведомлений `bot_notifications`
+  покрывает все сценарии бот↔сайт↔БД; баг атрибуции рефералов исправлен. Проверено
+  end-to-end: deep-link авторизация, уведомления о продлении/рефералах/оплате. Остаётся
+  тестовый запуск оплаты в тестовом магазине ЮKassa и CRUD тарифов.
 
 ## 2. Архитектура (docker-compose)
 
@@ -167,6 +167,11 @@
 2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
    но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
 3. **Админ-панель / управление планами** — опционально.
+4. **Тесты**: приложение не имеет комплексного unit/integration тестирования. Необходимо
+   добавить тесты для критической логики: авторизация (валидация init_data, токены deep-link),
+   реферальная программа (бонусы, атрибуция), уведомления (очередь, дедуп), биллинг
+   (webhook, проверка подписи). Технологии: Go — `testing` + `testify`, Python — `pytest`,
+   Frontend — `vitest` (уже настроен, есть примеры в `__tests__/`).
 7. **Обход DNS-блокировки сайта покупателями**: добавлена команда `/fix` и кнопка
    «🔧 Починить доступ к сайту» в боте. Бот спрашивает ОС и отправляет готовые скрипты
    `add_hosts_windows.bat` и `add_hosts_linux_macos.sh`, которые прописывают
@@ -246,8 +251,6 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   при открытии сайта как Mini App `window.Telegram.WebApp.initData` авто-логинит
   пользователя (см. `frontend/src/store/auth.tsx`). В обычном браузере `AuthForm` даёт
   глубокую ссылку на бота (`https://t.me/<bot_username>`, `bot_username` из `GET /api/config`).
-- Логин вне Telegram невозможен: пользователь должен открыть Mini App из бота
-  (`Открыть WebApp` в `bot/main.py` → `WEB_APP_URL`).
 - **Telegram Login через deep-link (браузер):** на `/login` и `/register`
   кнопка «Войти через Telegram». Фронт запрашивает `POST /api/auth/telegram/link`
   → получает `token` + `login_url` (`https://t.me/<bot>?start=<token>`) → открывает
@@ -256,6 +259,10 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
   подтверждения получает `access_token` → редижектит в `/dashboard`. Токены живут
   5 минут, таблица `telegram_login_tokens`. Реферальные коды (короткие, < 16 символов)
   по-прежнему запоминаются в `pending_refs` и применяются при `/buy`.
+- **Telegram Login Widget** (`auth.VerifyTelegramWidget`, `POST /api/auth/telegram/widget`)
+  был реализован, но ЗАМЕНЁН на deep-link (виджет требовал `/setdomain` у @BotFather и
+  имел проблемы с CSP). Код виджета остался в кодовой базе как резервный — можно удалить,
+  если не понадобится.
 
 ## 6. Подводные камни (gotchas)
 
@@ -290,6 +297,11 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - Миграции в `db.go` написаны как `CREATE TABLE IF NOT EXISTS` + `ALTER ... IF NOT EXISTS`
   (идемпотентны, безопасны для уже созданной БД, включая ослабление старых NOT NULL).
 - `/api/bot/referral` — это POST, не GET. При вызове из бота отправляется POST с `{"telegram_id": ...}`.
+- **БАГ frontend entrypoint (исправлен 2026-08-31):** `frontend/docker-entrypoint.sh`
+  изначально делал `rm -rf /app/dist`, но `/app/dist` — это mount point (volume `frontend_dist`),
+  и `rm` падал с `Resource busy`. Исправлено на `find /app/dist -mindepth 1 -delete`,
+  что удаляет содержимое, но оставляет сам mount point. Если увидите в логах
+  `rm: can't remove '/app/dist': Resource busy` — пересоберите frontend.
 
 ## 7. Быстрый индекс файлов для правок
 
@@ -304,9 +316,12 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 - Store-методы (включая рефералы/начисления/планы/платежи): `backend/internal/store/store.go`
 - Конфиг (дни подписки/уведомлений/рефералов/юкасса): `backend/internal/config/config.go`
 - Бот (aiogram): `bot/main.py`, `bot/add_hosts_windows.bat`, `bot/add_hosts_linux_macos.sh`
-- Деплой: `docker-compose.yml`, `bot/Dockerfile`, `nginx/conf.d/default.conf`
+- Аутентификация (deep-link + WebApp): `backend/internal/auth/telegram.go`, `backend/internal/handlers/auth.go`
+- Деплой: `docker-compose.yml`, `bot/Dockerfile`, `frontend/docker-entrypoint.sh`, `nginx/conf.d/default.conf`
 - Фронт (биллинг-кнопка): `frontend/src/api/billing.ts`, `frontend/src/components/PricingCards.tsx`
 - Фронт (подписка/рефералы/тест-бейдж): `frontend/src/pages/Subscription.tsx`,
   `frontend/src/components/Referral.tsx`, `frontend/src/api/referral.ts`,
   `frontend/src/api/config.ts`, `frontend/src/styles/Subscription.module.css`,
   `frontend/src/styles/Referral.module.css`
+- Фронт (авторизация): `frontend/src/pages/AuthForm.tsx`, `frontend/src/api/auth.ts`,
+  `frontend/src/store/auth.tsx`, `frontend/src/styles/Auth.module.css`
