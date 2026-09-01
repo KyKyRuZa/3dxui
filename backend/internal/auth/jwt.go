@@ -36,8 +36,11 @@ type TokenService struct {
 
 // NewTokenService loads (or generates) the EC P-256 key used for signing.
 func NewTokenService(cfg *config.Config, log *zap.SugaredLogger) (*TokenService, error) {
-	if pem := os.Getenv("JWT_PRIVATE_KEY"); pem != "" {
-		key, err := parsePEM(pem)
+	if pemStr := os.Getenv("JWT_PRIVATE_KEY"); pemStr != "" {
+		// .env files often store the key as a single line with literal \n.
+		// Replace them with actual newlines before PEM parsing.
+		pemStr = strings.ReplaceAll(pemStr, `\n`, "\n")
+		key, err := parsePEM(pemStr)
 		if err != nil {
 			return nil, fmt.Errorf("parse JWT_PRIVATE_KEY: %w", err)
 		}
