@@ -61,6 +61,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 		auth := api.Group("/auth")
 		{
+			auth.POST("/register", h.register)
+			auth.POST("/login", h.login)
 			auth.POST("/telegram", h.telegram)
 			auth.POST("/telegram/widget", h.telegramWidget)
 			auth.POST("/telegram/link", h.telegramLink)

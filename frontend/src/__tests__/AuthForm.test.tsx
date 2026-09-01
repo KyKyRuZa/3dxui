@@ -32,15 +32,18 @@ describe("AuthForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders login title and subtitle", () => {
+  it("renders login title and form fields", () => {
     renderAuthForm();
-    expect(screen.getByText("Вход через Telegram")).toBeDefined();
-    expect(screen.getByText(/Регистрация и вход выполняются только через Telegram/)).toBeDefined();
+    expect(screen.getByText("Вход в аккаунт")).toBeDefined();
+    expect(screen.getByPlaceholderText("username")).toBeDefined();
+    expect(screen.getByPlaceholderText("••••••")).toBeDefined();
   });
 
-  it("renders Telegram login button when no loginUrl", () => {
+  it("renders register mode when switched", () => {
     renderAuthForm();
-    expect(screen.getByText("Войти через Telegram")).toBeDefined();
+    fireEvent.click(screen.getByText("Зарегистрироваться"));
+    expect(screen.getByText("Регистрация")).toBeDefined();
+    expect(screen.getByRole("checkbox")).toBeDefined();
   });
 
   it("fetches bot username from public config on mount", async () => {
@@ -65,11 +68,8 @@ describe("AuthForm", () => {
     );
 
     renderAuthForm();
-    // Check consent checkbox first
-    const checkbox = screen.getByRole("checkbox");
-    fireEvent.click(checkbox);
-    const btn = screen.getByText("Войти через Telegram");
-    fireEvent.click(btn);
+    const tgBtn = screen.getByText("Войти через Telegram");
+    fireEvent.click(tgBtn);
 
     await waitFor(() => {
       expect(screen.getByText("Открыть Telegram-бота")).toBeDefined();
@@ -82,9 +82,6 @@ describe("AuthForm", () => {
     );
 
     renderAuthForm();
-    // Check consent checkbox first
-    const checkbox = screen.getByRole("checkbox");
-    fireEvent.click(checkbox);
     fireEvent.click(screen.getByText("Войти через Telegram"));
 
     await waitFor(() => {
@@ -98,22 +95,72 @@ describe("AuthForm", () => {
     );
 
     renderAuthForm();
-    // Check consent checkbox first
-    const checkbox = screen.getByRole("checkbox");
-    fireEvent.click(checkbox);
     fireEvent.click(screen.getByText("Войти через Telegram"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Не удалось создать ссылку для входа/)).toBeDefined();
+      expect(screen.getByText(/Не удалось создать ссылку/)).toBeDefined();
     });
   });
 
-  it("shows error when consent not given", async () => {
+  it("shows error when register without consent", async () => {
     renderAuthForm();
-    fireEvent.click(screen.getByText("Войти через Telegram"));
+    // Switch to register mode by clicking the link
+    const switchLink = screen.getByText("Зарегистрироваться");
+    fireEvent.click(switchLink);
+
+    // Wait for register mode to render (checkbox appears)
+    await waitFor(() => {
+      expect(screen.getByRole("checkbox")).toBeDefined();
+    });
+
+    // Fill in username and password
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "newuser" } });
+    fireEvent.change(screen.getByPlaceholderText("••••••"), { target: { value: "password123" } });
+
+    // Click the register button (now visible)
+    const registerBtn = screen.getByText("Зарегистрироваться");
+    fireEvent.click(registerBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/необходимо согласие/)).toBeDefined();
+      expect(screen.getByText(/Для регистрации необходимо/)).toBeDefined();
+    });
+  });
+
+  it("calls login API on form submit", async () => {
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: "test_token", user: { id: 1, username: "test" } }), { status: 200 })
+    );
+
+    renderAuthForm();
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "testuser" } });
+    fireEvent.change(screen.getByPlaceholderText("••••••"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByText("Войти"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/login", expect.objectContaining({
+        method: "POST",
+      }));
+    });
+  });
+
+  it("calls register API on form submit", async () => {
+    const fetchMock = vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: "test_token", user: { id: 1, username: "newuser" } }), { status: 200 })
+    );
+
+    renderAuthForm();
+    // Switch to register mode
+    fireEvent.click(screen.getByText("Зарегистрироваться"));
+    fireEvent.change(screen.getByPlaceholderText("username"), { target: { value: "newuser" } });
+    fireEvent.change(screen.getByPlaceholderText("••••••"), { target: { value: "password123" } });
+    // Check consent
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByText("Зарегистрироваться"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({
+        method: "POST",
+      }));
     });
   });
 });

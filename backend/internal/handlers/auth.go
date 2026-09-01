@@ -108,6 +108,86 @@ func (h *Handler) issueSession(c *gin.Context, user *models.User) {
 // telegram registers/logs in a user via Telegram. The site has no email/password
 // flow: identity is established exclusively from the signed Telegram WebApp
 // initData. A new user is auto-created (username tg_<id>) on first sign-in.
+func (h *Handler) register(c *gin.Context) {
+	var body struct {
+		Username    string `json:"username" binding:"required,min=3,max=32"`
+		Password    string `json:"password" binding:"required,min=6,max=128"`
+		ConsentHash string `json:"consent_hash"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request: username (3-32 chars) and password (6+ chars) required"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check if username already exists
+	if _, err := h.store.GetUserByUsername(ctx, body.Username); err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "username already taken"})
+		return
+	} else if !errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Hash password
+	pwHash, err := auth.HashPassword(body.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Create user with password
+	user, err := h.store.CreateUser(ctx, body.Username, "", pwHash)
+	if err != nil {
+		h.log.Errorw("register: create user error", "username", body.Username, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Record consent if provided
+	if body.ConsentHash != "" {
+		ip := c.ClientIP()
+		_ = h.store.RecordConsent(ctx, user.ID, "privacy_policy", body.ConsentHash, ip)
+	}
+
+	h.issueSession(c, user)
+}
+
+// login authenticates a user by username and password.
+func (h *Handler) login(c *gin.Context) {
+	var body struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	user, err := h.store.GetUserByUsername(ctx, body.Username)
+	if errors.Is(err, store.ErrNotFound) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	// Verify password
+	if !auth.CheckPassword(user.PasswordHash, body.Password) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	h.issueSession(c, user)
+}
+
+// telegram registers/logs in a user via Telegram. Telegram-provisioned users
+// may not have a usable password (placeholder), so they must use Telegram login.
 func (h *Handler) telegram(c *gin.Context) {
 	var body struct {
 		InitData    string `json:"init_data"`

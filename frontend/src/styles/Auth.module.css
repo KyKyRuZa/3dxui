@@ -124,3 +124,44 @@
   color: var(--color-primary);
   text-decoration: underline;
 }
+
+.divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.divider span {
+  padding: 0 12px;
+}
+
+.tgButton {
+  width: 100%;
+  background: #0088cc;
+  color: #fff;
+  border: none;
+}
+
+.tgButton:hover {
+  background: #0077b5;
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
