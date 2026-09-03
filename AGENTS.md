@@ -217,6 +217,10 @@
 - **JWT_SECRET**: убран из required config (не используется, JWT работает на EC ключах).
 - **renewSubscription**: теперь продляет от текущего expiry, а не сбрасывает оставшиеся дни.
 - **Expired notifications**: параметр `hours` теперь парсится из query (было 24ч, бот вызывает 168ч).
+- **Race condition в вебхуке ЮKassa (дополнительная защита)**: если `provisionPlan` падает после `ClaimPayment`,
+  статус платежа сбрасывается в `pending` для повторной попытки, предотвращая неоплаченные подписки.
+- **Исправлен тинг переменной в обработчике `/api/bot/notifications/expired`**: локальная переменная `h`
+  больше не тенит ресивер хендлера.
 
 ### 4.2 Тесты (2026-09-01)
 - **Backend**: 6 пакетов, ~80+ тестов (auth, jwt, middleware, handlers, billing, store, utils).

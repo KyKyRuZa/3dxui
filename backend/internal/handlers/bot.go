@@ -461,8 +461,8 @@ func (h *Handler) botExpiring(c *gin.Context) {
 func (h *Handler) botExpired(c *gin.Context) {
 	ctx := c.Request.Context()
 	hours := 24
-	if h := c.Query("hours"); h != "" {
-		if parsed, err := strconv.Atoi(h); err == nil && parsed > 0 {
+	if hoursStr := c.Query("hours"); hoursStr != "" {
+		if parsed, err := strconv.Atoi(hoursStr); err == nil && parsed > 0 {
 			hours = parsed
 		}
 	}

@@ -192,7 +192,8 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 
 	if err := h.provisionPlan(ctx, userID, plan); err != nil {
 		h.log.Errorw("webhook: provisionPlan error", "userID", maskInt(userID), "plan", plan.ID, "error", err)
-		c.JSON(http.StatusOK, gin.H{"ok": true}) // YooKassa will retry
+		_ = h.store.UpdatePaymentStatus(ctx, payload.Object.ID, "pending")
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
 
