@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useEffect } from "react";
+import { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@hooks/useAuth";
 import Navbar from "@components/Navbar";
@@ -6,7 +6,6 @@ import Footer from "@components/Footer";
 import DashboardShell from "@components/DashboardShell";
 import CookieConsent from "@components/CookieConsent";
 import styles from "@styles/global.module.css";
-import { adminApi } from "@api/admin";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
@@ -18,31 +17,6 @@ const Subscription = lazy(() => import("./pages/Subscription"));
 const Instructions = lazy(() => import("./pages/Instructions"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Admin = lazy(() => import("./pages/Admin"));
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const [authed, setAuthed] = useState(false);
-  useEffect(() => {
-    adminApi.get("/plans").then(() => setAuthed(true)).catch(() => setAuthed(false));
-  }, []);
-  if (!authed) {
-    return (
-      <div className={`container ${styles.loadingState}`}>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const form = e.target as HTMLFormElement;
-          const data = new FormData(form);
-          adminApi.post("/login", { secret: data.get("secret") }).then(() => {
-            setAuthed(true);
-          }).catch(() => {});
-        }}>
-          <input name="secret" type="password" placeholder="admin secret" />
-          <button type="submit">Войти в админку</button>
-        </form>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
@@ -87,8 +61,8 @@ export default function App() {
             <Route path="instructions" element={<Instructions />} />
             <Route path="settings" element={<Settings />} />
           </Route>
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-          <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
         </Routes>
       </Suspense>
       <Footer />
