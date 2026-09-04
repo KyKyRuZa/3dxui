@@ -36,13 +36,12 @@ func New(db *sql.DB, rdb ...*redis.Client) *Store {
 
 func (s *Store) CreateUser(ctx context.Context, username, email, passwordHash string) (*models.User, error) {
 	const q = `
-INSERT INTO users (username, email, password_hash, referral_code)
-	VALUES ($1, $2, $3, $4)
+INSERT INTO users (username, email, password_hash)
+	VALUES ($1, $2, $3)
 	RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at`
 
-	code := s.uniqueReferralCode(ctx)
 	u := &models.User{}
-	err := s.db.QueryRowContext(ctx, q, username, email, passwordHash, code).
+	err := s.db.QueryRowContext(ctx, q, username, email, passwordHash).
 		Scan(&u.ID, &u.Username, &u.Email, &u.IsActive, &u.PanelUsername, &u.PanelUUID, &u.ReferralCode, &u.CreatedAt)
 	if err != nil {
 		var pqErr *pq.Error
@@ -51,6 +50,12 @@ INSERT INTO users (username, email, password_hash, referral_code)
 		}
 		return nil, fmt.Errorf("CreateUser db: %w", err)
 	}
+
+	code := fmt.Sprintf("ref%d", u.ID)
+	if _, err := s.db.ExecContext(ctx, `UPDATE users SET referral_code = $1 WHERE id = $2`, code, u.ID); err != nil {
+		return nil, fmt.Errorf("CreateUser referral_code: %w", err)
+	}
+	u.ReferralCode = sql.NullString{String: code, Valid: true}
 	return u, nil
 }
 

@@ -52,9 +52,13 @@ func TestTelegram_NewUser(t *testing.T) {
 		WillReturnError(sql.ErrNoRows)
 
 	mock.ExpectQuery("INSERT INTO users").
-		WithArgs("testuser", "", sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs("testuser", "", sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "is_active", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "testuser", nil, true, nil, nil, "refcode", now))
+			AddRow(1, "testuser", nil, true, nil, nil, nil, now))
+
+	mock.ExpectExec("UPDATE users SET referral_code").
+		WithArgs(sqlmock.AnyArg(), int64(1)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mock.ExpectExec("UPDATE users SET telegram_id").
 		WithArgs(int64(699469085), int64(1)).

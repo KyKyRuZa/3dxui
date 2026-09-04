@@ -14,6 +14,8 @@ import (
 	"github.com/ilyas/vpn-service/backend/internal/middleware"
 	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Handler holds dependencies shared by all HTTP handlers.
@@ -23,11 +25,12 @@ type Handler struct {
 	cfg     *config.Config
 	panel   *panel.Client
 	billing *billing.Client
+	redis   *redis.Client
 	log     *zap.SugaredLogger
 }
 
-func NewHandler(s *store.Store, j *auth.TokenService, cfg *config.Config, p *panel.Client, b *billing.Client, log *zap.SugaredLogger) *Handler {
-	return &Handler{store: s, jwt: j, cfg: cfg, panel: p, billing: b, log: log}
+func NewHandler(s *store.Store, j *auth.TokenService, cfg *config.Config, p *panel.Client, b *billing.Client, rdb *redis.Client, log *zap.SugaredLogger) *Handler {
+	return &Handler{store: s, jwt: j, cfg: cfg, panel: p, billing: b, redis: rdb, log: log}
 }
 
 func maskInt(v int64) string {
@@ -61,8 +64,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 		auth := api.Group("/auth")
 		{
-			auth.POST("/register", h.register)
-			auth.POST("/login", h.login)
+			auth.POST("/register", middleware.AuthAttemptLimiter(h.redis), h.register)
+			auth.POST("/login", middleware.AuthAttemptLimiter(h.redis), h.login)
 			auth.POST("/telegram", h.telegram)
 			auth.POST("/telegram/widget", h.telegramWidget)
 			auth.POST("/telegram/link", h.telegramLink)
@@ -70,18 +73,18 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			auth.POST("/refresh", h.refresh)
 			auth.POST("/logout", h.logout)
 			auth.GET("/profile", middleware.AuthRequired(h.jwt), h.profile)
-			auth.POST("/verify-login-code", h.verifyLoginCode)
+			auth.POST("/verify-login-code", middleware.CodeAttemptLimiter(h.redis), h.verifyLoginCode)
 		}
 
 		// Telegram bind/login code endpoints
 		codes := api.Group("/codes")
 		{
 			// Public: generate login code for Telegram user (called by bot)
-			codes.POST("/login", h.generateLoginCode)
+			codes.POST("/login", middleware.CodeAttemptLimiter(h.redis), h.generateLoginCode)
 			// Authenticated: generate bind code for current user
-			codes.POST("/bind", middleware.AuthRequired(h.jwt), h.generateBindCode)
+			codes.POST("/bind", middleware.AuthRequired(h.jwt), middleware.CodeAttemptLimiter(h.redis), h.generateBindCode)
 			// Authenticated: verify bind code (called by bot or frontend)
-			codes.POST("/bind/verify", middleware.AuthRequired(h.jwt), h.verifyBindCode)
+			codes.POST("/bind/verify", middleware.AuthRequired(h.jwt), middleware.CodeAttemptLimiter(h.redis), h.verifyBindCode)
 		}
 
 		sub := api.Group("/subscription")
@@ -110,7 +113,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		{
 			bill.GET("/plans", middleware.AuthRequired(h.jwt), h.listPlans)
 			bill.POST("/create", middleware.AuthRequired(h.jwt), h.createPayment)
-			bill.POST("/webhook", h.billingWebhook)
+			bill.POST("/webhook", middleware.WebhookLimiter(h.redis), h.billingWebhook)
 		}
 
 		ref := api.Group("/referral")

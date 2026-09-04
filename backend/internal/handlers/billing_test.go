@@ -100,7 +100,7 @@ func newBillingTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock, *httptest.S
 
 	billingClient := billing.New(cfg.YookassaShopID, cfg.YookassaSecretKey, cfg.YookassaAPIURL)
 
-	h := NewHandler(st, tokenSvc, cfg, nil, billingClient, log.Sugar())
+	h := NewHandler(st, tokenSvc, cfg, nil, billingClient, nil, log.Sugar())
 	return h, mock, srv
 }
 
@@ -121,7 +121,7 @@ func newProvisionTestHandler(t *testing.T) (*Handler, sqlmock.Sqlmock, *httptest
 	log, _ := zap.NewDevelopment()
 	p := panel.New(srv.URL, "admin", "admin", "", log.Sugar())
 
-	h := NewHandler(st, nil, cfg, p, nil, log.Sugar())
+	h := NewHandler(st, nil, cfg, p, nil, nil, log.Sugar())
 	return h, mock, srv
 }
 
@@ -257,7 +257,7 @@ func TestBillingWebhook_BillingNotConfigured(t *testing.T) {
 	tokenSvc, err := newTestTokenServiceAuth(t)
 	require.NoError(t, err)
 
-	h := NewHandler(st, tokenSvc, cfg, nil, nil, log.Sugar())
+	h := NewHandler(st, tokenSvc, cfg, nil, nil, nil, log.Sugar())
 
 	payload := `{"event":"payment.succeeded","object":{"id":"pay_123","status":"succeeded"}}`
 	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))
@@ -282,7 +282,7 @@ func TestResolvePaymentTarget_FromDB(t *testing.T) {
 
 	cfg := &config.Config{}
 	log, _ := zap.NewDevelopment()
-	h := NewHandler(st, nil, cfg, nil, nil, log.Sugar())
+	h := NewHandler(st, nil, cfg, nil, nil, nil, log.Sugar())
 
 	verified := &billing.Payment{ID: "pay_123"}
 	userID, planID := resolvePaymentTarget(t.Context(), h, verified, "pay_123")
@@ -303,7 +303,7 @@ func TestResolvePaymentTarget_FromMetadata(t *testing.T) {
 
 	cfg := &config.Config{}
 	log, _ := zap.NewDevelopment()
-	h := NewHandler(st, nil, cfg, nil, nil, log.Sugar())
+	h := NewHandler(st, nil, cfg, nil, nil, nil, log.Sugar())
 
 	verified := &billing.Payment{
 		ID: "pay_123",
@@ -330,7 +330,7 @@ func TestResolvePaymentTarget_NoTarget(t *testing.T) {
 
 	cfg := &config.Config{}
 	log, _ := zap.NewDevelopment()
-	h := NewHandler(st, nil, cfg, nil, nil, log.Sugar())
+	h := NewHandler(st, nil, cfg, nil, nil, nil, log.Sugar())
 
 	verified := &billing.Payment{ID: "pay_123"}
 	userID, planID := resolvePaymentTarget(t.Context(), h, verified, "pay_123")

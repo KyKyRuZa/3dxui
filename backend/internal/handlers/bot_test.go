@@ -42,7 +42,7 @@ func newTestHandler(t *testing.T) (*Handler, *store.Store, sqlmock.Sqlmock) {
 	log, _ := zap.NewDevelopment()
 	tokenSvc, err := auth.NewTokenService(cfg, log.Sugar())
 	require.NoError(t, err)
-	h := NewHandler(st, tokenSvc, cfg, nil, nil, log.Sugar())
+	h := NewHandler(st, tokenSvc, cfg, nil, nil, nil, log.Sugar())
 	return h, st, mock
 }
 

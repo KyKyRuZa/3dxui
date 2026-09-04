@@ -34,11 +34,12 @@ type Config struct {
 	ReferralRewardDays      int
 	ReferralSignupBonusDays int
 
-	YookassaShopID    string
-	YookassaSecretKey string
-	YookassaAPIURL    string
-	YookassaReturnURL string
-	YookassaTestMode  bool
+	YookassaShopID          string
+	YookassaSecretKey       string
+	YookassaAPIURL          string
+	YookassaReturnURL       string
+	YookassaTestMode        bool
+	YookassaWebhookSecret   string
 }
 
 func Load() (*Config, error) {
@@ -78,6 +79,7 @@ func Load() (*Config, error) {
 		YookassaAPIURL:          viper.GetString("yookassa_api_url"),
 		YookassaReturnURL:       viper.GetString("yookassa_return_url"),
 		YookassaTestMode:        viper.GetBool("yookassa_test_mode") || strings.HasPrefix(viper.GetString("yookassa_secret_key"), "test_"),
+		YookassaWebhookSecret:   viper.GetString("yookassa_webhook_secret"),
 	}
 
 	if cfg.BotUsername == "" {

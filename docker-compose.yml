@@ -23,6 +23,11 @@ services:
       - "8383:8383"
       - "8443:8443"
       - "2096:2096"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
 
   postgres:
     image: postgres:16-alpine
@@ -41,6 +46,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
 
   redis:
     image: redis:7-alpine
@@ -53,6 +63,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
 
   backend:
     build:
@@ -83,6 +98,7 @@ services:
       YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY}
       YOOKASSA_API_URL: ${YOOKASSA_API_URL}
       YOOKASSA_RETURN_URL: ${YOOKASSA_RETURN_URL}
+      YOOKASSA_WEBHOOK_SECRET: ${YOOKASSA_WEBHOOK_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,6 +106,11 @@ services:
         condition: service_healthy
     expose:
       - "8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
 
   frontend:
     build:
@@ -100,6 +121,11 @@ services:
       - frontend_dist:/app/dist
     depends_on:
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
 
   nginx:
     build:
@@ -116,6 +142,11 @@ services:
     depends_on:
       - frontend
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
 
   bot:
     build:
@@ -131,6 +162,11 @@ services:
     depends_on:
       backend:
         condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
 
 volumes:
   postgres_data:

@@ -291,16 +291,20 @@ func TestCreateUser(t *testing.T) {
 	store, mock := newTestStore(t)
 	ctx := context.Background()
 
-	mock.ExpectQuery("INSERT INTO users \\(username, email, password_hash, referral_code\\) VALUES \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at").
-		WithArgs("testuser", "", sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectQuery("INSERT INTO users \\(username, email, password_hash\\) VALUES \\(\\$1, \\$2, \\$3\\) RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at").
+		WithArgs("testuser", "", sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "is_active", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "testuser", nil, true, nil, nil, "refabc123", time.Now()))
+			AddRow(1, "testuser", nil, true, nil, nil, nil, time.Now()))
+
+	mock.ExpectExec("UPDATE users SET referral_code = \\$1 WHERE id = \\$2").
+		WithArgs(sqlmock.AnyArg(), int64(1)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	user, err := store.CreateUser(ctx, "testuser", "", "hash")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), user.ID)
 	assert.Equal(t, "testuser", user.Username)
-	assert.Equal(t, "refabc123", user.ReferralCode.String)
+	assert.Equal(t, "ref1", user.ReferralCode.String)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -308,8 +312,8 @@ func TestCreateUserConflict(t *testing.T) {
 	store, mock := newTestStore(t)
 	ctx := context.Background()
 
-	mock.ExpectQuery("INSERT INTO users \\(username, email, password_hash, referral_code\\) VALUES \\(\\$1, \\$2, \\$3, \\$4\\) RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at").
-		WithArgs("testuser", "", sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectQuery("INSERT INTO users \\(username, email, password_hash\\) VALUES \\(\\$1, \\$2, \\$3\\) RETURNING id, username, email, is_active, panel_username, panel_uuid, referral_code, created_at").
+		WithArgs("testuser", "", sqlmock.AnyArg()).
 		WillReturnError(&pq.Error{Code: "23505"})
 
 	_, err := store.CreateUser(ctx, "testuser", "", "hash")

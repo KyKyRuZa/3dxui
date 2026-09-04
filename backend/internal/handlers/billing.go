@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +19,25 @@ import (
 	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
 )
+
+func isPrivateIP(ip net.IP) bool {
+	private := []string{
+		"127.0.0.1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1",
+	}
+	for _, cidr := range private {
+		if strings.Contains(cidr, "/") {
+			_, network, err := net.ParseCIDR(cidr)
+			if err == nil && network.Contains(ip) {
+				return true
+			}
+			continue
+		}
+		if ip.String() == cidr {
+			return true
+		}
+	}
+	return false
+}
 
 func (h *Handler) listPlans(c *gin.Context) {
 	plans, err := h.store.ListPlans(c.Request.Context())
@@ -77,6 +98,8 @@ func (h *Handler) createPayment(c *gin.Context) {
 	}
 	if err := h.store.CreatePayment(c.Request.Context(), row); err != nil {
 		h.log.Errorw("createPayment: store error", "paymentID", maskStr(p.ID), "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save payment"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -86,6 +109,34 @@ func (h *Handler) createPayment(c *gin.Context) {
 	})
 }
 
+// yookassaWebhookCIDRs are published by YooKassa for webhook notifications.
+// See: https://yookassa.ru/developers/using-api/webhooks
+var yookassaWebhookCIDRs = []string{
+	"185.71.76.0/27",
+	"185.71.77.0/27",
+	"77.88.5.0/24",
+	"77.88.6.0/24",
+	"77.88.7.0/24",
+	"77.88.8.0/24",
+	"78.140.7.0/24",
+	"78.140.8.0/24",
+	"212.109.197.0/24",
+	"212.109.198.0/24",
+}
+
+func isYookassaIP(ip net.IP) bool {
+	for _, cidr := range yookassaWebhookCIDRs {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // billingWebhook handles YooKassa notifications. YooKassa does not sign
 // webhooks, so we re-fetch the payment via the authenticated API to verify it
 // actually succeeded before provisioning.
@@ -93,6 +144,21 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 	if h.billing == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "billing not configured"})
 		return
+	}
+
+	// First layer: allow only YooKassa IP ranges, or local/private IPs for tests/dev.
+	remoteIP := net.ParseIP(c.ClientIP())
+	if remoteIP != nil && !isPrivateIP(remoteIP) && !isYookassaIP(remoteIP) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
+	// Second layer: optional shared secret in X-Webhook-Secret header.
+	if h.cfg.YookassaWebhookSecret != "" {
+		if secret := c.GetHeader("X-Webhook-Secret"); secret != h.cfg.YookassaWebhookSecret {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 	}
 
 	var payload struct {
@@ -220,8 +286,9 @@ func resolvePaymentTarget(ctx context.Context, h *Handler, verified *billing.Pay
 		if uid, ok := verified.Metadata["user_id"]; ok {
 			if pid, ok2 := verified.Metadata["plan_id"]; ok2 {
 				var parsed int64
-				fmt.Sscanf(uid, "%d", &parsed)
-				return parsed, pid
+				if _, err := fmt.Sscanf(uid, "%d", &parsed); err == nil {
+					return parsed, pid
+				}
 			}
 		}
 	}

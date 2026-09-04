@@ -53,7 +53,7 @@ func main() {
 	st := store.New(pg, redisClient)
 	panelClient := panel.New(cfg.PanelURL, cfg.PanelUsername, cfg.PanelPassword, cfg.PanelAPIToken, sugar)
 	billingClient := billing.New(cfg.YookassaShopID, cfg.YookassaSecretKey, cfg.YookassaAPIURL)
-	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient, billingClient, sugar)
+	h := handlers.NewHandler(st, jwtSvc, cfg, panelClient, billingClient, redisClient, sugar)
 
 	if cfg.IsProd() {
 		gin.SetMode(gin.ReleaseMode)
