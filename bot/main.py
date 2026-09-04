@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import json
+import signal
 from datetime import datetime, timezone
 from io import BytesIO
 
@@ -29,6 +30,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8080")
 BOT_API_SECRET = os.getenv("BOT_API_SECRET", "")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://thenomoreblocks.com")
 NOTIFY_INTERVAL = int(os.getenv("NOTIFY_INTERVAL", "3600"))
+MONITORING_CHAT_ID = os.getenv("MONITORING_CHAT_ID", "")
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -39,6 +41,15 @@ pending_refs: dict[int, str] = {}
 
 def api_headers() -> dict:
     return {"X-Bot-Secret": BOT_API_SECRET, "Content-Type": "application/json"}
+
+
+async def send_monitoring_alert(text: str) -> None:
+    if not MONITORING_CHAT_ID or not text:
+        return
+    try:
+        await bot.send_message(MONITORING_CHAT_ID, text)
+    except TelegramBadRequest:
+        pass
 
 
 async def backend_ensure_user(telegram_id: int, first_name: str | None = None, referral_code: str | None = None) -> dict:
@@ -748,11 +759,23 @@ async def notification_loop() -> None:
                 logger.info("sent %d bot notifications", sent_bot)
         except Exception as e:  # noqa: BLE001
             logger.exception("notification loop error: %s", e)
+            await send_monitoring_alert(f"❌ Notification loop error: {e}")
 
 
 async def main() -> None:
     global http_client
     http_client = httpx.AsyncClient()
+    loop = asyncio.get_running_loop()
+
+    def _signal_handler() -> None:
+        logger.info("Shutdown signal received")
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _signal_handler)
+        except NotImplementedError:
+            pass
+
     try:
         asyncio.create_task(notification_loop())
         await dp.start_polling(bot)
@@ -762,7 +785,9 @@ async def main() -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped")
     finally:
+        await send_monitoring_alert("⛔ Bot stopped")
         await http_client.aclose()
+        await bot.session.close()
 
 
 if __name__ == "__main__":

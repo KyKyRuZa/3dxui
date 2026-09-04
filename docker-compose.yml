@@ -159,6 +159,7 @@ services:
       BACKEND_URL: http://backend:8080
       WEB_APP_URL: ${WEB_APP_URL}
       NOTIFY_INTERVAL: ${NOTIFY_INTERVAL:-3600}
+      MONITORING_CHAT_ID: ${MONITORING_CHAT_ID}
     depends_on:
       backend:
         condition: service_started

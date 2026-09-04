@@ -336,6 +336,7 @@ curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
   `frontend/src/components/CookieConsent.tsx`, `frontend/src/pages/Settings.tsx`,
   `frontend/src/styles/Privacy.module.css`, `frontend/src/styles/CookieConsent.module.css`,
   `frontend/src/styles/Settings.module.css`
+- 152-ФЗ / контакты / DPA: `COMPLIANCE.md`
 
 ## 8. Что осталось сделать (TODO)
 
@@ -346,5 +347,7 @@ curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
    но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
 3. **Админ-панель / управление планами** — опционально.
 4. **Назначить ответственного за обработку ПД** — требуется по 152-ФЗ, опубликовать контакты.
+   Шаблон добавлен в `Privacy.tsx` и `COMPLIANCE.md`, осталось заполнить реальные данные.
 5. **Договоры с третьими лицами (DPA)** — документировать передачу данных ЮKassa и Telegram.
+   Список нужных DPA и места хранения описаны в `COMPLIANCE.md`.
 6. **Обход DNS-блокировки**: добавлена команда `/fix` и кнопка «🔧 Починить доступ к сайту» в боте.
