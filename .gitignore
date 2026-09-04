@@ -51,3 +51,4 @@ server
 # Python bytecode cache
 bot/__pycache__/
 __pycache__/
+backup/
