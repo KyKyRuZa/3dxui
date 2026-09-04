@@ -26,3 +26,10 @@ export type DiscountInput = {
   used_count?: number;
   is_active: boolean;
 };
+
+export const adminPaths = {
+  login: "/api/admin/login",
+  logout: "/api/admin/logout",
+  plans: "/api/admin/plans",
+  discounts: "/api/admin/discounts",
+};
