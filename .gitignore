@@ -16,9 +16,17 @@ vendor/
 .vscode/
 !.vscode/extensions.json
 
+# Backup artifacts
+backup/
+backups/
+
 # Secrets / credentials
 nginx/certs/
 nginx/logs/
+
+# JWT
+jwt.env
+jwt_private_key.pem
 
 # Panel data
 3dxui-data/
