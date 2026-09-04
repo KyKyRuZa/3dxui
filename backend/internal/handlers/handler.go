@@ -130,6 +130,21 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 			user.DELETE("/", h.deleteUser)
 			user.POST("/consent", h.recordConsent)
 		}
+
+		admin := api.Group("/admin")
+		{
+			admin.POST("/login", h.adminLogin)
+			admin.POST("/logout", h.adminLogout)
+			admin.Use(h.adminAuth())
+			admin.GET("/plans", h.adminListPlans)
+			admin.POST("/plans", h.adminCreatePlan)
+			admin.PUT("/plans/:id", h.adminUpdatePlan)
+			admin.DELETE("/plans/:id", h.adminDeletePlan)
+			admin.GET("/discounts", h.adminListDiscounts)
+			admin.POST("/discounts", h.adminCreateDiscount)
+			admin.PUT("/discounts/:id", h.adminUpdateDiscount)
+			admin.DELETE("/discounts/:id", h.adminDeleteDiscount)
+		}
 	}
 }
 

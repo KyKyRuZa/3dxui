@@ -100,6 +100,23 @@ CREATE TABLE IF NOT EXISTS plans (
 	group_name    TEXT NOT NULL DEFAULT 'Free'
 );
 
+CREATE TABLE IF NOT EXISTS discounts (
+	id          TEXT PRIMARY KEY,
+	code        TEXT NOT NULL UNIQUE,
+	plan_id     TEXT REFERENCES plans(id),
+	percent     INTEGER NOT NULL DEFAULT 0,
+	fixed_minor BIGINT NOT NULL DEFAULT 0,
+	starts_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	expires_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	max_uses    INTEGER NOT NULL DEFAULT 0,
+	used_count  INTEGER NOT NULL DEFAULT 0,
+	is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+	created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_discounts_code ON discounts(code);
+CREATE INDEX IF NOT EXISTS idx_discounts_plan ON discounts(plan_id);
+
 INSERT INTO plans (id, name, duration_days, price_minor, currency, group_name) VALUES
 	('standard', 'Standard', 30, 29900, 'RUB', 'Free'),
 	('pro', 'Pro', 90, 79900, 'RUB', 'Free')

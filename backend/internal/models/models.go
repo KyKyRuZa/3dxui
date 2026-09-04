@@ -75,6 +75,22 @@ type Plan struct {
 	GroupName    string `db:"group_name" json:"group_name"`
 }
 
+// Discount describes a time-bound promotion applied to a plan or globally.
+type Discount struct {
+	ID          string       `db:"id" json:"id"`
+	Code        string       `db:"code" json:"code"`
+	PlanID      string       `db:"plan_id" json:"plan_id"`
+	Percent     int          `db:"percent" json:"percent"`
+	FixedMinor  int64        `db:"fixed_minor" json:"fixed_minor"`
+	StartsAt    time.Time    `db:"starts_at" json:"starts_at"`
+	ExpiresAt   time.Time    `db:"expires_at" json:"expires_at"`
+	MaxUses     int          `db:"max_uses" json:"max_uses"`
+	UsedCount   int          `db:"used_count" json:"used_count"`
+	IsActive    bool         `db:"is_active" json:"is_active"`
+	CreatedAt   time.Time    `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time    `db:"updated_at" json:"updated_at"`
+}
+
 // PaymentRow tracks a YooKassa payment and links it to the buying user/plan.
 type PaymentRow struct {
 	ID          string    `db:"id" json:"id"`

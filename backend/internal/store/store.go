@@ -449,6 +449,93 @@ FROM plans WHERE id = $1`, id).
 	return p, nil
 }
 
+// CreatePlan inserts a new plan.
+func (s *Store) CreatePlan(ctx context.Context, p *models.Plan) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO plans (id, name, duration_days, price_minor, currency, group_name)
+VALUES ($1, $2, $3, $4, $5, $6)`,
+		p.ID, p.Name, p.DurationDays, p.PriceMinor, p.Currency, p.GroupName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// UpdatePlan updates an existing plan.
+func (s *Store) UpdatePlan(ctx context.Context, p *models.Plan) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE plans SET name = $2, duration_days = $3, price_minor = $4, currency = $5, group_name = $6
+WHERE id = $1`,
+		p.ID, p.Name, p.DurationDays, p.PriceMinor, p.Currency, p.GroupName)
+	return err
+}
+
+// DeletePlan removes a plan by id.
+func (s *Store) DeletePlan(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM plans WHERE id = $1`, id)
+	return err
+}
+
+// ListDiscounts returns all discounts.
+func (s *Store) ListDiscounts(ctx context.Context) ([]models.Discount, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, code, plan_id, percent, fixed_minor, starts_at, expires_at, max_uses, used_count, is_active, created_at, updated_at
+FROM discounts ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]models.Discount, 0)
+	for rows.Next() {
+		var d models.Discount
+		if err := rows.Scan(&d.ID, &d.Code, &d.PlanID, &d.Percent, &d.FixedMinor, &d.StartsAt, &d.ExpiresAt, &d.MaxUses, &d.UsedCount, &d.IsActive, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// GetDiscount returns a discount by id.
+func (s *Store) GetDiscount(ctx context.Context, id string) (*models.Discount, error) {
+	d := &models.Discount{}
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, code, plan_id, percent, fixed_minor, starts_at, expires_at, max_uses, used_count, is_active, created_at, updated_at
+FROM discounts WHERE id = $1`, id).
+		Scan(&d.ID, &d.Code, &d.PlanID, &d.Percent, &d.FixedMinor, &d.StartsAt, &d.ExpiresAt, &d.MaxUses, &d.UsedCount, &d.IsActive, &d.CreatedAt, &d.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// CreateDiscount inserts a new discount.
+func (s *Store) CreateDiscount(ctx context.Context, d *models.Discount) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO discounts (id, code, plan_id, percent, fixed_minor, starts_at, expires_at, max_uses, used_count, is_active)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		d.ID, d.Code, d.PlanID, d.Percent, d.FixedMinor, d.StartsAt, d.ExpiresAt, d.MaxUses, d.UsedCount, d.IsActive)
+	return err
+}
+
+// UpdateDiscount updates an existing discount.
+func (s *Store) UpdateDiscount(ctx context.Context, d *models.Discount) error {
+	_, err := s.db.ExecContext(ctx, `
+UPDATE discounts SET code = $2, plan_id = $3, percent = $4, fixed_minor = $5, starts_at = $6, expires_at = $7, max_uses = $8, used_count = $9, is_active = $10
+WHERE id = $1`,
+		d.ID, d.Code, d.PlanID, d.Percent, d.FixedMinor, d.StartsAt, d.ExpiresAt, d.MaxUses, d.UsedCount, d.IsActive)
+	return err
+}
+
+// DeleteDiscount removes a discount by id.
+func (s *Store) DeleteDiscount(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM discounts WHERE id = $1`, id)
+	return err
+}
+
 // CreatePayment records a newly created YooKassa payment.
 func (s *Store) CreatePayment(ctx context.Context, p *models.PaymentRow) error {
 	_, err := s.db.ExecContext(ctx, `
