@@ -82,6 +82,10 @@ func (h *Handler) adminCreatePlan(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+	if p.DurationDays <= 0 || p.PriceMinor < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_days must be > 0 and price_minor >= 0"})
+		return
+	}
 	if err := h.store.CreatePlan(c.Request.Context(), &p); err != nil {
 		h.log.Errorw("admin create plan error", "plan", p.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -98,6 +102,10 @@ func (h *Handler) adminUpdatePlan(c *gin.Context) {
 		return
 	}
 	p.ID = id
+	if p.DurationDays <= 0 || p.PriceMinor < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "duration_days must be > 0 and price_minor >= 0"})
+		return
+	}
 	if err := h.store.UpdatePlan(c.Request.Context(), &p); err != nil {
 		h.log.Errorw("admin update plan error", "plan", id, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -131,6 +139,14 @@ func (h *Handler) adminCreateDiscount(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+	if d.Percent < 0 || d.Percent > 100 || d.FixedMinor < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid discount values"})
+		return
+	}
+	if d.StartsAt.After(d.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "starts_at must be before expires_at"})
+		return
+	}
 	if err := h.store.CreateDiscount(c.Request.Context(), &d); err != nil {
 		h.log.Errorw("admin create discount error", "discount", d.ID, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -147,6 +163,14 @@ func (h *Handler) adminUpdateDiscount(c *gin.Context) {
 		return
 	}
 	d.ID = id
+	if d.Percent < 0 || d.Percent > 100 || d.FixedMinor < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid discount values"})
+		return
+	}
+	if d.StartsAt.After(d.ExpiresAt) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "starts_at must be before expires_at"})
+		return
+	}
 	if err := h.store.UpdateDiscount(c.Request.Context(), &d); err != nil {
 		h.log.Errorw("admin update discount error", "discount", id, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
