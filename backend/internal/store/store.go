@@ -10,6 +10,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/ilyas/vpn-service/backend/internal/auth"
 	"github.com/ilyas/vpn-service/backend/internal/billing"
 	"github.com/ilyas/vpn-service/backend/internal/models"
 	"github.com/ilyas/vpn-service/backend/internal/utils"
@@ -75,14 +76,28 @@ func (s *Store) GetUserByTelegramID(ctx context.Context, telegramID int64) (*mod
 	return s.scanUser(ctx, "WHERE telegram_id = $1", telegramID)
 }
 
+func (s *Store) VerifyPassword(ctx context.Context, username string, password string) error {
+	u, err := s.GetUserByUsername(ctx, username)
+	if err != nil {
+		return err
+	}
+	if u.PasswordHash == "" {
+		return fmt.Errorf("password not set")
+	}
+	if !auth.CheckPassword(u.PasswordHash, password) {
+		return fmt.Errorf("invalid password")
+	}
+	return nil
+}
+
 func (s *Store) scanUser(ctx context.Context, where string, arg any) (*models.User, error) {
 	const base = `
-SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at
+SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at
 	FROM users `
 
 	u := &models.User{}
 	err := s.db.QueryRowContext(ctx, base+where, arg).Scan(
-		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.IsActive, &u.TelegramID, &u.PanelUsername, &u.PanelUUID, &u.ReferralCode, &u.CreatedAt,
+		&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.IsActive, &u.IsAdmin, &u.TelegramID, &u.PanelUsername, &u.PanelUUID, &u.ReferralCode, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

@@ -7,7 +7,8 @@ type Discount = DiscountInput & { id: string };
 
 export default function Admin() {
   const [authed, setAuthed] = useState(false);
-  const [secret, setSecret] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
@@ -55,7 +56,7 @@ export default function Admin() {
     e.preventDefault();
     setLoginError("");
     try {
-      await adminApi.post("/login", { secret });
+      await adminApi.post("/login", { username, password });
       setAuthed(true);
     } catch (e: any) {
       setLoginError(e?.response?.data?.error || "Ошибка входа");
@@ -65,7 +66,8 @@ export default function Admin() {
   const handleLogout = async () => {
     await adminApi.post("/logout");
     setAuthed(false);
-    setSecret("");
+    setUsername("");
+    setPassword("");
   };
 
   const savePlan = async (e: React.FormEvent) => {
@@ -121,12 +123,18 @@ export default function Admin() {
       <div className={`container ${styles.wrap}`}>
         <form className={styles.card} onSubmit={handleLogin}>
           <h1>Admin</h1>
-          <p className={styles.hint}>Введите секрет доступа к админке.</p>
+          <p className={styles.hint}>Введите учётные данные администратора.</p>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+          />
           <input
             type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            placeholder="Admin secret"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
           />
           {loginError && <p className={styles.error}>{loginError}</p>}
           <button type="submit">Войти</button>

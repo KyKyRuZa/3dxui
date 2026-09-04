@@ -22,10 +22,10 @@ func TestTelegram_ValidInitData(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = .*").
 		WithArgs("testuser").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "testuser", nil, "hash", true, int64(699469085), nil, nil, "refcode", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "testuser", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
 
 	mock.ExpectExec("INSERT INTO sessions").
 		WithArgs(sqlmock.AnyArg(), int64(1), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
@@ -47,7 +47,7 @@ func TestTelegram_NewUser(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = .*").
 		WithArgs("testuser").
 		WillReturnError(sql.ErrNoRows)
 
@@ -152,10 +152,10 @@ func TestTelegramLinkCheck_Claimed(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"token", "telegram_id", "created_at", "expires_at", "claimed_at"}).
 			AddRow("testtoken", int64(699469085), now, now.Add(time.Minute), now))
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = .*").
 		WithArgs("tg_699469085").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_699469085", nil, "hash", true, int64(699469085), nil, nil, "refcode", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_699469085", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
 
 	mock.ExpectExec("INSERT INTO sessions").
 		WithArgs(sqlmock.AnyArg(), int64(1), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
@@ -200,10 +200,10 @@ func TestRefresh_ValidSession(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "refresh_token_hash", "user_agent", "ip", "expires_at", "created_at"}).
 			AddRow("sessid", 1, hash, "test-agent", "127.0.0.1", now.Add(time.Hour), now))
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
 		WithArgs(int64(1)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_1", nil, "hash", true, int64(1), nil, nil, "refcode", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_1", nil, "hash", true, false, int64(1), nil, nil, "refcode", now))
 
 	mock.ExpectExec("DELETE FROM sessions WHERE id = .*").
 		WithArgs("sessid").

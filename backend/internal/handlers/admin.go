@@ -12,17 +12,23 @@ import (
 const adminCookieName = "admin_session"
 
 type adminLoginRequest struct {
-	Secret string `json:"secret"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 func (h *Handler) adminLogin(c *gin.Context) {
 	var body adminLoginRequest
-	if err := c.ShouldBindJSON(&body); err != nil || body.Secret == "" {
+	if err := c.ShouldBindJSON(&body); err != nil || body.Username == "" || body.Password == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
-	if body.Secret != h.cfg.AdminAPISecret || h.cfg.AdminAPISecret == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid admin secret"})
+	user, err := h.store.GetUserByUsername(c.Request.Context(), body.Username)
+	if err != nil || !user.IsActive || !user.IsAdmin {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+	if err := h.store.VerifyPassword(c.Request.Context(), body.Username, body.Password); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 	cookie := &http.Cookie{

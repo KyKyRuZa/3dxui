@@ -325,10 +325,10 @@ func TestGetUserByUsername(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = \\$1").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = \\$1").
 		WithArgs("testuser").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "testuser", nil, "hash", true, int64(99), nil, nil, "refcode123", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "testuser", nil, "hash", true, false, int64(99), nil, nil, "refcode123", now))
 
 	user, err := store.GetUserByUsername(ctx, "testuser")
 	require.NoError(t, err)
@@ -343,7 +343,7 @@ func TestGetUserByUsernameNotFound(t *testing.T) {
 	store, mock := newTestStore(t)
 	ctx := context.Background()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = \\$1").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE username = \\$1").
 		WithArgs("nouser").
 		WillReturnError(sql.ErrNoRows)
 
@@ -356,10 +356,10 @@ func TestGetUserByTelegramID(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = \\$1").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = \\$1").
 		WithArgs(int64(12345)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_12345", nil, "hash", true, int64(12345), nil, nil, nil, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_12345", nil, "hash", true, false, int64(12345), nil, nil, nil, now))
 
 	user, err := store.GetUserByTelegramID(ctx, 12345)
 	require.NoError(t, err)
@@ -701,10 +701,10 @@ func TestGetUserByReferralCode(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE referral_code = \\$1").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE referral_code = \\$1").
 		WithArgs("refcode123").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "referrer", nil, "hash", true, int64(1), nil, nil, "refcode123", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "referrer", nil, "hash", true, false, int64(1), nil, nil, "refcode123", now))
 
 	user, err := store.GetUserByReferralCode(ctx, "refcode123")
 	require.NoError(t, err)

@@ -168,10 +168,10 @@ func TestBillingWebhook_PaymentCanceled(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "plan_id", "status", "amount_minor", "currency", "created_at", "updated_at"}).
 			AddRow("pay_456", 1, "standard", "canceled", int64(29900), "RUB", time.Now(), time.Now()))
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
 		WithArgs(int64(1)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_1", nil, "hash", true, int64(699469085), nil, nil, "refcode", time.Now()))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_1", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", time.Now()))
 
 	mock.ExpectExec("INSERT INTO bot_notifications").
 		WithArgs(int64(699469085), "payment_failed", "payfail:pay_456", sqlmock.AnyArg()).
@@ -345,10 +345,10 @@ func TestProvisionPlan_NewUser(t *testing.T) {
 	defer srv.Close()
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
 		WithArgs(int64(1)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_1", nil, "hash", true, int64(699469085), nil, nil, "refcode", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_1", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
 
 	mock.ExpectQuery("SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at, expires_at FROM subscriptions WHERE user_id = .*").
 		WithArgs(int64(1)).
@@ -381,10 +381,10 @@ func TestProvisionPlan_ExistingUser(t *testing.T) {
 	defer srv.Close()
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
 		WithArgs(int64(1)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_1", nil, "hash", true, int64(699469085), nil, nil, "refcode", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_1", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
 
 	mock.ExpectQuery("SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at, expires_at FROM subscriptions WHERE user_id = .*").
 		WithArgs(int64(1)).

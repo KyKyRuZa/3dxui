@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
 	telegram_id      BIGINT UNIQUE,
 	panel_username   TEXT UNIQUE,
 	panel_uuid       TEXT UNIQUE,
+	is_admin         BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

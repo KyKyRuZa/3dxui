@@ -184,7 +184,7 @@ func TestWebReferral_Unauthorized(t *testing.T) {
 func TestBotGetUser_NotFound(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
 		WithArgs(int64(999)).
 		WillReturnError(sql.ErrNoRows)
 
@@ -203,10 +203,10 @@ func TestBotGetUser_NoSubscription(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
 		WithArgs(int64(699469085)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_699469085", nil, "hash", true, int64(699469085), nil, nil, "refcode", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_699469085", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
 
 	mock.ExpectQuery("SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at, expires_at FROM subscriptions WHERE user_id = .*").
 		WithArgs(int64(1)).
@@ -236,10 +236,10 @@ func TestBotReferral(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 	now := time.Now()
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
 		WithArgs(int64(99)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
-			AddRow(1, "tg_99", nil, "hash", true, int64(99), nil, nil, "refcode123", now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_99", nil, "hash", true, false, int64(99), nil, nil, "refcode123", now))
 
 	mock.ExpectQuery("SELECT referral_code FROM users WHERE id = .*").
 		WithArgs(int64(1)).
@@ -264,7 +264,7 @@ func TestBotReferral(t *testing.T) {
 func TestBotReferralNotFound(t *testing.T) {
 	h, _, mock := newTestHandler(t)
 
-	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE telegram_id = .*").
 		WithArgs(int64(99)).
 		WillReturnError(sql.ErrNoRows)
 
