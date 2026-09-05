@@ -12,11 +12,12 @@
 
 - Модуль бэкенда: `github.com/ilyas/vpn-service/backend` (исторически такое имя пакета).
 - Git-remote: `github.com/KyKyRuZa/3dxui` (ветка `master`).
-- Статус (на 2026-09-01): регистрация/вход на сайте — по username/password или через Telegram
+- Статус (на 2026-09-04): регистрация/вход на сайте — по username/password или через Telegram
   (deep-link или код); универсальная очередь уведомлений `bot_notifications`
-  покрывает все сценарии бот↔сайт↔БД; баг атрибуции рефералов исправлен. Проверено
-  end-to-end: deep-link авторизация, уведомления о продлении/рефералах/оплате, вход по коду.
-  Остаётся тестовый запуск оплаты в тестовом магазине ЮKassa и CRUD тарифов.
+  покрывает все сценарии бот↔сайт↔БД; баг атрибуции рефералов исправлен; админка
+  CRUD тарифов/скидок готова. Проверено end-to-end: deep-link авторизация,
+  уведомления о продлении/рефералах/оплате, вход по коду, админка.
+  Остаётся перевод биллинга на боевой магазин ЮKassa и отдельные доработки.
 
 ## 2. Архитектура (docker-compose)
 
@@ -30,7 +31,7 @@
 - `bot` — Python + aiogram (`AutoColorsBot`), добавлен в compose позже (раньше его не было).
 
 Ключевые каталоги бэкенда:
-- `internal/handlers/` — `handler.go` (роуты), `auth.go`, `bot.go`, `subscription.go`.
+- `internal/handlers/` — `handler.go` (роуты), `auth.go`, `bot.go`, `subscription.go`, `admin.go`.
 - `internal/store/` — Postgres-доступ (`store.go`), Redis-доступ (`store_redis.go`), модели в `internal/models/`.
 - `internal/panel/` — клиент к REST API 3x-ui (`client.go`).
 - `internal/db/` — подключение + миграции (`db.go`).
@@ -190,18 +191,42 @@
   имел проблемы с CSP). Код виджета остался в кодовой базе как резервный — можно удалить,
   если не понадобится.
 
-### 3.8 Соответствие 152-ФЗ (2026-09-01)
+### 3.8 Админка — CRUD тарифов и скидок (2026-09-04)
+- В `users` добавлено поле `is_admin` (`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;`).
+- Новая таблица `discounts` (промокоды/скидки): `id`, `code UNIQUE`, `plan_id`, `percent`, `fixed_minor`,
+  `starts_at`, `expires_at`, `max_uses`, `used_count`, `is_active`, `created_at`, `updated_at`.
+- Бэкенд:
+  - `backend/internal/handlers/admin.go`: `/api/admin/login`, `/api/admin/logout`,
+    `/api/admin/plans`, `/api/admin/discounts` с httpOnly cookie `admin_session`.
+  - `backend/internal/store/store.go`: `CreatePlan/UpdatePlan/DeletePlan`,
+    `ListDiscounts/CreateDiscount/UpdateDiscount/DeleteDiscount`.
+  - Валидация: `duration_days > 0`, `price_minor >= 0`, `0 <= percent <= 100`,
+    `fixed_minor >= 0`, `starts_at < expires_at`.
+- Фронтенд:
+  - `frontend/src/pages/Admin.tsx` — страница `/admin`.
+  - `frontend/src/api/admin.ts` — typed API клиент.
+  - `frontend/src/styles/Admin.module.css` — стили.
+- Доступ: завести обычного пользователя через сайт, потом в БД выполнить
+  `UPDATE users SET is_admin = true WHERE username = '...';`.
 
-- Политика конфиденциальности: `frontend/src/pages/Privacy.tsx` (доступна по `/privacy`)
-- Сбор согласия при регистрации: checkbox в `AuthForm.tsx` + запись в `consent_records`
-- Экспорт данных: `GET /api/user/data-export` (все данные пользователя)
-- Удаление аккаунта: `DELETE /api/user` (каскадное удаление всех данных)
-- Cookie consent banner: `frontend/src/components/CookieConsent.tsx`
-- Таблица `consent_records` для хранения записей о согласии
-- Права субъекта: доступ к данным, удаление, отзыв согласия
-- **TODO**: необходимо назначить ответственного за обработку ПД и опубликовать контакты
+### 3.9 Безопасность и стабилизация (2026-09-04)
+- **Bot graceful shutdown**: в `bot/main.py` добавлен `shutdown_event` и корректное закрытие
+  `http_client`/`bot.session` по `SIGTERM`/`SIGINT`.
+- **Monitoring**: добавлен `MONITORING_CHAT_ID`; бот отправляет алерты о старте/остановке и
+  ошибках notification loop в указанный Telegram-чат.
+- **Backup**: добавлен `backup.sh` + cron `0 3 * * *` с ротацией 7 дней `pg_dump` архивов.
+- **Production resource limits**: добавлены `deploy.resources.limits` для всех сервисов
+  в `docker-compose.yml`.
+- **Bot rate limiting**: Redis-backed `AuthAttemptLimiter`, `CodeAttemptLimiter`, `WebhookLimiter`
+  в `backend/internal/middleware/rate.go`.
+- **Nginx rate limit**: добавлены `limit_req_zone` и apply к auth/code/webhook рутам.
+- **YooKassa webhook protection**: IP whitelist + optional `YOOKASSA_WEBHOOK_SECRET`.
+- **TLS fix**: `PANEL_INSECURE_SKIP_VERIFY=true` позволяет backend вызывать панель 3x-ui
+  по Docker hostname без проблем с сертификатом.
+- **.gitignore**: добавлены `backups/`, `jwt.env`, `jwt_private_key.pem`.
+- **Compliance**: `COMPLIANCE.md` создан; `Privacy.tsx` обезличен, без персональных данных оператора.
 
-## 4. Безопасность и исправления (актуально 2026-09-01)
+## 4. Безопасность и исправления
 
 ### 4.1 Исправленные уязвимости
 - **Race condition в вебхуке ЮKassa**: добавлен атомарный `ClaimPayment` (`UPDATE ... WHERE status NOT IN`),
@@ -215,14 +240,23 @@
 - **Дублирование уведомлений**: добавлен атомарный `ClaimBotNotifications` с `FOR UPDATE SKIP LOCKED`.
 - **parseInt64**: теперь возвращает ошибку вместо silencе 0.
 - **JWT_SECRET**: убран из required config (не используется, JWT работает на EC ключах).
-- **renewSubscription**: теперь продляет от текущего expiry, а не сбрасывает оставшиеся дни.
+- **renewSubscription**: теперь продлевает от текущего expiry, а не сбрасывает оставшиеся дни.
 - **Expired notifications**: параметр `hours` теперь парсится из query (было 24ч, бот вызывает 168ч).
 - **Race condition в вебхуке ЮKassa (дополнительная защита)**: если `provisionPlan` падает после `ClaimPayment`,
   статус платежа сбрасывается в `pending` для повторной попытки, предотвращая неоплаченные подписки.
 - **Исправлен тинг переменной в обработчике `/api/bot/notifications/expired`**: локальная переменная `h`
   больше не тенит ресивер хендлера.
 
-### 4.2 Тесты (2026-09-01)
+### 4.2 Актуальные проблемы/риски
+- **`JWT_PRIVATE_KEY` часто пустой в `.env`**: сессии эфемерные, после рестарта backend
+  все пользователи сбросятся. Фикс: сгенерировать EC P256 PEM один раз и задать в `.env`.
+- **`ADMIN_API_SECRET` больше не используется**: админка переведена на `users.is_admin`.
+- **`backup.sh` не выгружает `custom.json` панели 3x-ui**: сейчас только `pg_dump vpn_db`.
+- **Per-user/IP lockout в rate limiting**: базовая защита есть, но пер-юзер блокировка ещё не доработана.
+- **Скорость бота**: `NOTIFY_INTERVAL` по умолчанию 3600с, на проде стоит 60с — это можно
+  повысить обратно, чтобы уменьшить нагрузку.
+
+### 4.3 Тесты
 - **Backend**: 6 пакетов, ~80+ тестов (auth, jwt, middleware, handlers, billing, store, utils).
 - **Frontend**: 33 теста (AuthForm, PricingCards, authStore, Subscription, Referral).
 - **Bot**: 53 теста (notifications, referrals, login token, bind code, login code).
@@ -234,7 +268,7 @@
 cp .env.example .env        # заполнить BOT_TOKEN, BOT_API_SECRET, DATABASE_URL, REDIS_URL,
                             # PANEL_URL/USERNAME/PASSWORD/API_TOKEN, DEFAULT_INBOUND_IDS
                             # JWT_PRIVATE_KEY (для постоянных сессий)
-docker compose up -d --build backend bot
+docker compose up -d --build backend bot frontend
 ```
 
 Проверка выдачи ключа ботом (изнутри сети контейнеров):
@@ -254,6 +288,20 @@ docker compose exec postgres psql -U vpn_user -d vpn_db \
 Рефералы (тест без ЮKassa): у реферера `/referral` → ссылка; с другого аккаунта открыть
 `https://t.me/AutoColorsBot?start=<code>` → `/buy` → новому юзеру +2 дня, у реферера
 счётчик «Приглашено» +1. Вознаграждение рефереру (+7 дней) — только после платежа.
+
+Админка:
+```bash
+# 1. Создать обычного пользователя через сайт или curl
+curl -X POST https://thenomoreblocks.com/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"myadmin","password":"myadmin123","email":"admin@example.com"}'
+
+# 2. Повысить до админа
+docker compose exec postgres psql -U vpn_user -d vpn_db \
+  -c "UPDATE users SET is_admin = true WHERE username = 'myadmin';"
+
+# 3. Открыть https://thenomoreblocks.com/admin и войти
+```
 
 Проверка verification codes:
 ```bash
@@ -286,7 +334,7 @@ curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
   `JWT_PRIVATE_KEY` в `.env` + пробросить `JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}` в
   `backend.environment` compose-файла, затем пересобрать backend.
 - **BOT_API_SECRET обязателен для работы бот-эндпоинтов:** если переменная не задана,
-  middleware `BotRequired` возвращает 404, а в логах видно `The "BOT_API_SECRET" variable is not set`.
+  middleware `BotRequired` возвращает 404, а в логах видно `The "BOT_API_SECRET" variable is not set".
   Добавь `BOT_API_SECRET` в `.env` и пересобери `backend` и `bot`.
 - **DNS-инъекция РКН:** домен `thenomoreblocks.com` может блокироваться на уровне провайдера
   (клиенты получают битый DNS на WiFi, при этом мобильный интернет/через VPN работает).
@@ -312,6 +360,7 @@ curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
 ## 7. Быстрый индекс файлов для правок
 
 - Роуты бота/API: `backend/internal/handlers/handler.go`
+- Админка: `backend/internal/handlers/admin.go`
 - Биллинг (plans/payments/webhook/provision): `backend/internal/handlers/billing.go`
 - Клиент ЮKassa: `backend/internal/billing/yookassa.go`
 - Логика бота (ensure/renew/referral/expiring): `backend/internal/handlers/bot.go`
@@ -336,6 +385,8 @@ curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
   `frontend/src/components/CookieConsent.tsx`, `frontend/src/pages/Settings.tsx`,
   `frontend/src/styles/Privacy.module.css`, `frontend/src/styles/CookieConsent.module.css`,
   `frontend/src/styles/Settings.module.css`
+- Фронт (админка): `frontend/src/pages/Admin.tsx`, `frontend/src/api/admin.ts`,
+  `frontend/src/styles/Admin.module.css`
 - 152-ФЗ / контакты / DPA: `COMPLIANCE.md`
 
 ## 8. Что осталось сделать (TODO)
@@ -343,11 +394,12 @@ curl -X POST https://thenomoreblocks.com/api/auth/verify-login-code \
 1. **Перевод биллинга на боевой магазин ЮKassa**: сейчас используется тестовый
    (`YOOKASSA_SHOP_ID=1268375`, ключ `test_...`). После одобрения магазина заменить
    `YOOKASSA_SECRET_KEY` на боевой и проверить реальное списание.
-2. **Модель тарифов (планов)**: базовая таблица `plans` уже есть (seeded standard/pro),
-   но управление планами (CRUD, цены в админке) не реализовано. Пока правим руками в БД.
-3. **Админ-панель / управление планами** — опционально.
-4. **Назначить ответственного за обработку ПД** — требуется по 152-ФЗ, опубликовать контакты.
-   Шаблон добавлен в `Privacy.tsx` и `COMPLIANCE.md`, осталось заполнить реальные данные.
-5. **Договоры с третьими лицами (DPA)** — документировать передачу данных ЮKassa и Telegram.
-   Список нужных DPA и места хранения описаны в `COMPLIANCE.md`.
+2. **Пер-user/IP lockout**: базовая rate limiting есть, но пороговая блокировка по пользователю/IP
+   ещё не доработана.
+3. **Генерация/подключение `JWT_PRIVATE_KEY`**: если нужны постоянные сессии,
+   сгенерируй EC P256 PEM и пропиши в `.env`.
+4. **Заполнить контакты ответственного за ПД**: в `Privacy.tsx` и `COMPLIANCE.md` сейчас
+   обезличенный вариант; при необходимости можно заменить на реальные данные.
+5. **DPA с третьими лицами**: документально оформить передачу данных ЮKassa и Telegram.
 6. **Обход DNS-блокировки**: добавлена команда `/fix` и кнопка «🔧 Починить доступ к сайту» в боте.
+7. **Monitoring**: базовые алерты в Telegram есть; при необходимости подключить внешний мониторинг.
