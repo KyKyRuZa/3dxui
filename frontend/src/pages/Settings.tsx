@@ -56,7 +56,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `nomoreblocks-data-${Date.now()}.json`;
+      a.download = `walyny4-vpn-data-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {

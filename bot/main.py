@@ -365,7 +365,7 @@ async def cmd_start(message: types.Message) -> None:
         # Otherwise treat the parameter as a referral code (captured on /buy).
         pending_refs[message.from_user.id] = param
     await message.answer(
-        "<b>Добро пожаловать в NoMoreBlocks VPN! 🛡️</b>\n\n"
+        "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
         "Я выдаю и доставляю ваши VPN-ключи прямо сюда в Telegram.\n"
         "Нажмите <b>🔑 Купить ключ VPN</b>, чтобы получить конфиг для обхода блокировок.\n\n"
         "🔐 <b>Уже есть аккаунт на сайте?</b> Используйте /link для входа через Telegram.",

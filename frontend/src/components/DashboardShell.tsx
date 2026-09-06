@@ -16,7 +16,7 @@ export default function DashboardShell() {
       <aside className={styles.sidebar}>
         <Link to="/dashboard" className={styles.brand}>
           <span className={styles.brandIcon}>●</span>
-          TheNoMoreBlocks
+          Walyny4 vpn
         </Link>
         {links.map((l) => (
           <NavLink

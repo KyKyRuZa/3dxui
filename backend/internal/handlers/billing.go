@@ -79,7 +79,7 @@ func (h *Handler) createPayment(c *gin.Context) {
 		"user_id": fmt.Sprintf("%d", userID),
 		"plan_id": plan.ID,
 	}
-	description := fmt.Sprintf("NoMoreBlocks VPN — %s", plan.Name)
+	description := fmt.Sprintf("Walyny4 vpn — %s", plan.Name)
 
 	p, err := h.billing.CreatePayment(idem, amountValue, plan.Currency, description, h.cfg.YookassaReturnURL, metadata)
 	if err != nil {

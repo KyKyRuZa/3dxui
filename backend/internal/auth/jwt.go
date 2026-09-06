@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	issuer       = "TheNoMoreBlocks"
+	issuer       = "Walyny4 vpn"
 	accessTTL    = 15 * time.Minute
 	refreshTTL   = 30 * 24 * time.Hour
 	refreshBytes = 32

@@ -12,7 +12,7 @@ export default function Navbar() {
       <div className={styles.inner}>
         <Link to="/" className={styles.brand}>
           <span className={styles.brandIcon}>●</span>
-          TheNoMoreBlocks
+          Walyny4 vpn
         </Link>
 
         <div className={styles.links}>
