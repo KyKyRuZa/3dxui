@@ -229,6 +229,13 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		h.log.Warnw("webhook: amount mismatch", "paymentID", maskStr(payload.Object.ID), "plan", plan.ID, "expected", plan.PriceMinor, "got", gotMinor)
 	}
 
+	if err := h.provisionPlan(ctx, userID, plan); err != nil {
+		h.log.Errorw("webhook: provisionPlan error", "userID", maskInt(userID), "plan", plan.ID, "error", err)
+		_ = h.store.UpdatePaymentStatus(ctx, payload.Object.ID, "pending")
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+		return
+	}
+
 	amountMinor := plan.PriceMinor
 	if gotMinor > 0 {
 		amountMinor = gotMinor
