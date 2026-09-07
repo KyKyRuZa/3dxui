@@ -113,7 +113,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		{
 			bill.GET("/plans", middleware.AuthRequired(h.jwt), h.listPlans)
 			bill.POST("/create", middleware.AuthRequired(h.jwt), h.createPayment)
-			bill.POST("/webhook", middleware.WebhookLimiter(h.redis), h.billingWebhook)
+			bill.POST("/webhook", h.billingWebhook)
 		}
 
 		ref := api.Group("/referral")

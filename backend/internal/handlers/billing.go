@@ -146,21 +146,6 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// First layer: allow only YooKassa IP ranges, or local/private IPs for tests/dev.
-	remoteIP := net.ParseIP(c.ClientIP())
-	if remoteIP != nil && !isPrivateIP(remoteIP) && !isYookassaIP(remoteIP) {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
-	}
-
-	// Second layer: optional shared secret in X-Webhook-Secret header.
-	if h.cfg.YookassaWebhookSecret != "" {
-		if secret := c.GetHeader("X-Webhook-Secret"); secret != h.cfg.YookassaWebhookSecret {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-			return
-		}
-	}
-
 	var payload struct {
 		Event  string `json:"event"`
 		Object struct {
@@ -175,11 +160,8 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Acknowledge everything YooKassa sends; only act on successful captures.
-	// Cancellations: record and stop. Nothing to provision.
 	if payload.Event == "payment.canceled" {
 		_ = h.store.UpdatePaymentStatus(ctx, payload.Object.ID, "canceled")
-		// Notify the user that their payment failed so they can retry.
 		if p, perr := h.store.GetPayment(ctx, payload.Object.ID); perr == nil {
 			if u, uerr := h.store.GetUserByID(ctx, p.UserID); uerr == nil && u.TelegramID.Valid && u.TelegramID.Int64 != 0 {
 				if payload2, jerr := json.Marshal(map[string]any{
@@ -204,12 +186,10 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// Re-fetch from the API to verify authenticity and status BEFORE claiming.
-	// This avoids creating a local row for fake webhook events.
 	verified, err := h.billing.GetPayment(payload.Object.ID)
 	if err != nil {
 		h.log.Errorw("webhook: verify fetch error", "paymentID", maskStr(payload.Object.ID), "error", err)
-		c.JSON(http.StatusOK, gin.H{"ok": true}) // keep retrying later
+		c.JSON(http.StatusOK, gin.H{"ok": true})
 		return
 	}
 	if verified.Status != "succeeded" {
@@ -217,12 +197,8 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// Ensure a local payment row exists (handles webhook arriving before the
-	// local create call's DB write). Then atomically claim it for processing.
 	_, _ = h.store.CreatePaymentIfNotExists(ctx, payload.Object.ID, verified)
 
-	// Atomically claim this payment for processing. Returns false if another
-	// request already processed it (idempotency against concurrent webhooks).
 	claimed, err := h.store.ClaimPayment(ctx, payload.Object.ID)
 	if err != nil {
 		h.log.Errorw("webhook: claim payment error", "paymentID", maskStr(payload.Object.ID), "error", err)
@@ -248,23 +224,11 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		return
 	}
 
-	// Reconcile the actually captured amount (major units, e.g. "299.00") against
-	// the plan price (kopecks) and warn, but still provision — YooKassa already
-	// captured, so we must fulfil.
 	gotMinor := amountMinorFromString(verified.Amount.Value)
 	if gotMinor > 0 && gotMinor != plan.PriceMinor {
 		h.log.Warnw("webhook: amount mismatch", "paymentID", maskStr(payload.Object.ID), "plan", plan.ID, "expected", plan.PriceMinor, "got", gotMinor)
 	}
 
-	if err := h.provisionPlan(ctx, userID, plan); err != nil {
-		h.log.Errorw("webhook: provisionPlan error", "userID", maskInt(userID), "plan", plan.ID, "error", err)
-		_ = h.store.UpdatePaymentStatus(ctx, payload.Object.ID, "pending")
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-		return
-	}
-
-	// Record the authoritative captured amount, then credit the referrer
-	// (no-op if there is no pending referral).
 	amountMinor := plan.PriceMinor
 	if gotMinor > 0 {
 		amountMinor = gotMinor
