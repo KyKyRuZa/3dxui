@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconHeartHandshake } from "@tabler/icons-react";
 import { Button } from "@components/Button";
 import { getReferral, type ReferralStats } from "@api/referral";
 import styles from "@styles/Referral.module.css";
@@ -35,7 +36,7 @@ export default function Referral() {
 
   return (
     <div className={`card ${styles.wrap}`}>
-      <div className={styles.title}>🤝 Реферальная программа</div>
+      <div className={styles.title}><IconHeartHandshake size={20} /> Реферальная программа</div>
       <p className={styles.lead}>
         Пригласите друзей и получайте <b>+7 дней бесплатно</b> за каждого, кто
         купит платный тариф. Друг по вашей ссылке получает бонус к подписке.

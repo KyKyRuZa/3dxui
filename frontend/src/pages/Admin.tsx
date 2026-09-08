@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconCheck, IconCircleX } from "@tabler/icons-react";
 import styles from "@styles/Admin.module.css";
 import { adminApi, type PlanInput, type DiscountInput } from "@api/admin";
 
@@ -459,7 +460,7 @@ export default function Admin() {
                   <td>{fmtDate(d.expires_at)}</td>
                   <td>{d.max_uses}</td>
                   <td>{d.used_count}</td>
-                  <td>{d.is_active ? "✅" : "❌"}</td>
+                  <td style={{ display: 'inline-flex', alignItems: 'center' }}>{d.is_active ? <IconCheck size={18} color="var(--color-success)" /> : <IconCircleX size={18} color="var(--color-danger)" />}</td>
                   <td className={styles.actionsCell}>
                     <button onClick={() => startEditDiscount(d)}>Редактировать</button>
                     <button className={styles.danger} onClick={() => removeDiscount(d.id)}>

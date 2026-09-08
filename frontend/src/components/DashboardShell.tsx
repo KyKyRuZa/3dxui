@@ -1,11 +1,17 @@
-import { Outlet, NavLink, Link, useLocation } from "react-router-dom";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
+import {
+  IconHome,
+  IconHexagon,
+  IconLayoutGrid,
+  IconSettings,
+} from "@tabler/icons-react";
 import styles from "@styles/DashboardShell.module.css";
 
 const navItems = [
-  { to: "/dashboard", label: "Профиль", end: true, icon: "◉" },
-  { to: "/dashboard/subscription", label: "Подписка", icon: "◇" },
-  { to: "/dashboard/instructions", label: "Инструкции", icon: "▣" },
-  { to: "/dashboard/settings", label: "Настройки", icon: "⚙" },
+  { to: "/dashboard", label: "Профиль", end: true, icon: IconHome },
+  { to: "/dashboard/subscription", label: "Подписка", icon: IconHexagon },
+  { to: "/dashboard/instructions", label: "Инструкции", icon: IconLayoutGrid },
+  { to: "/dashboard/settings", label: "Настройки", icon: IconSettings },
 ];
 
 export default function DashboardShell() {
@@ -14,22 +20,23 @@ export default function DashboardShell() {
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar}>
-        <Link to="/dashboard" className={styles.brand}>
-          <span className={styles.brandIcon} aria-hidden="true">●</span>
-          Walyny4 vpn
-        </Link>
         <nav aria-label="Dashboard">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ""}`}
-            >
-              <span aria-hidden="true" style={{ fontSize: "var(--text-sm)", opacity: 0.7 }}>{item.icon}</span>
-              {item.label}
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ""}`}
+              >
+                <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center" }}>
+                  <Icon size={18} stroke={2} />
+                </span>
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
       </aside>
 
@@ -42,8 +49,7 @@ export default function DashboardShell() {
             {location.pathname === "/dashboard/settings" && "Настройки"}
           </div>
           <div className={styles.headerStatus}>
-            <span className="dot" />
-            Активна
+            <span className="dot" /> Активна
           </div>
         </header>
         <main className={styles.content}>

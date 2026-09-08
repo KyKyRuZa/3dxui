@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@tabler/icons-react": "^3.46.0",
     "axios": "^1.18.1",
     "qrcode": "^1.5.3",
     "react": "^19.2.7",

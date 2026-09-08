@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { IconUser, IconLink, IconShield } from "@tabler/icons-react";
 import { useAuth } from "@hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import styles from "@styles/Settings.module.css";
@@ -96,7 +97,7 @@ export default function Settings() {
       <div className={styles.grid}>
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIcon}>👤</div>
+            <div className={styles.cardIcon}><IconUser size={20} /></div>
             <div className={styles.cardTitle}>Аккаунт</div>
           </div>
           <div className={styles.form}>
@@ -112,7 +113,7 @@ export default function Settings() {
 
         <div className={styles.card}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIcon}>🔗</div>
+            <div className={styles.cardIcon}><IconLink size={20} /></div>
             <div className={styles.cardTitle}>Привязка Telegram</div>
           </div>
           <div className={styles.form}>
@@ -158,7 +159,7 @@ export default function Settings() {
 
         <div className={`${styles.card} ${styles.spanFull}`}>
           <div className={styles.cardHeader}>
-            <div className={styles.cardIcon}>🛡️</div>
+            <div className={styles.cardIcon}><IconShield size={20} /></div>
             <div className={styles.cardTitle}>Персональные данные (152-ФЗ)</div>
           </div>
           <div className={styles.form}>

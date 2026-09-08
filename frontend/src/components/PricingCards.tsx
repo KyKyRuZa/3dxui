@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { IconTestPipe, IconCheck } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@components/Button";
 import { createPayment, getPlans, type Plan } from "@api/billing";
@@ -81,7 +82,7 @@ export default function PricingCards() {
         {info && <div className={styles.info}>{info}</div>}
         {testMode && (
           <div className={styles.testMode}>
-            🧪 Тестовый режим оплаты (ЮKassa): для проверки используйте тестовую
+            <IconTestPipe size={16} /> Тестовый режим оплаты (ЮKassa): для проверки используйте тестовую
             карту, реальное списание не произойдёт.
           </div>
         )}
@@ -95,7 +96,7 @@ export default function PricingCards() {
               </div>
               <ul className={styles.perks}>
                 {planPerks(p).map((perk) => (
-                  <li key={perk}>✓ {perk}</li>
+                  <li key={perk} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconCheck size={16} /> {perk}</li>
                 ))}
               </ul>
               <div className={styles.cta}>

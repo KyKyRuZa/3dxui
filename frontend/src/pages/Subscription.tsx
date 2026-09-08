@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { IconAlertTriangle, IconKey, IconCircleCheck } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@components/Button";
 import { useAuth } from "@hooks/useAuth";
@@ -76,7 +77,7 @@ export default function Subscription() {
       {expired ? (
         <div className={`${styles.statusBanner} ${styles.statusBannerExpired}`}>
           <div className={styles.statusHeader}>
-            <div className={`${styles.statusIcon} ${styles.statusIconExpired}`}>🚨</div>
+            <div className={`${styles.statusIcon} ${styles.statusIconExpired}`}><IconAlertTriangle size={24} /></div>
             <div className={styles.statusTitle}>Подписка истекла</div>
           </div>
           <p className={styles.statusMeta}>
@@ -84,15 +85,15 @@ export default function Subscription() {
             Или пригласите друга и получите <strong>+7 дней бесплатно</strong>.
           </p>
           <div className={styles.actions}>
-            <Button onClick={() => navigate("/pricing")}>
-              🔑 Купить ключ VPN
-            </Button>
+          <Button onClick={() => navigate("/pricing")}>
+            <IconKey size={18} /> Купить ключ VPN
+          </Button>
           </div>
         </div>
       ) : sub?.expires_at ? (
         <div className={`${styles.statusBanner} ${styles.statusBannerActive}`}>
           <div className={styles.statusHeader}>
-            <div className={`${styles.statusIcon} ${styles.statusIconActive}`}>✅</div>
+            <div className={`${styles.statusIcon} ${styles.statusIconActive}`}><IconCircleCheck size={24} /></div>
             <div className={styles.statusTitle}>Подписка активна</div>
           </div>
           <p className={styles.statusMeta}>

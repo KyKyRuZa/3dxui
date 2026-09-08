@@ -1,11 +1,11 @@
 import { useAuth } from "@hooks/useAuth";
+import { IconZap } from "@tabler/icons-react";
 import styles from "@styles/DashboardOverview.module.css";
 
 export default function DashboardOverview() {
   const { user } = useAuth();
 
   const metrics = [
-    { label: "Статус", value: user?.is_active ? "Активна" : "Неактивна", accent: user?.is_active },
     { label: "Пользователь", value: user?.username ?? "—" },
     { label: "Email", value: user?.email ?? "—" },
   ];
@@ -20,9 +20,6 @@ export default function DashboardOverview() {
             style={{ animationDelay: `${i * 0.08}s` }}
           >
             <div className={styles.kpiLabel}>{m.label}</div>
-            <div className={styles.kpiValue} style={m.accent ? { color: "var(--color-success)" } : undefined}>
-              {m.value}
-            </div>
           </div>
         ))}
       </div>
@@ -31,7 +28,9 @@ export default function DashboardOverview() {
         <div className="card">
           <div className={styles.quickStart}>
             <div className={styles.quickStartHeader}>
-              <div className={styles.quickStartIcon}>⚡</div>
+              <div className={styles.quickStartIcon}>
+              <IconZap size={20} stroke={2} />
+            </div>
               <div className={styles.cardTitle}>Быстрый старт</div>
             </div>
             <ol className={styles.steps}>

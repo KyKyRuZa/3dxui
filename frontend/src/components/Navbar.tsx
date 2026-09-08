@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "@hooks/useAuth";
+import { IconHexagon } from "@tabler/icons-react";
 import styles from "@styles/Navbar.module.css";
 
 export default function Navbar() {
@@ -36,7 +37,7 @@ export default function Navbar() {
       <div className={styles.inner}>
         <Link to="/" className={styles.brand} aria-label="Walyny4 VPN home">
           <span className={styles.brandIcon} aria-hidden="true">
-            ●
+            <IconHexagon size={18} stroke={2.5} />
           </span>
           <span className={styles.brandText}>Walyny4 VPN</span>
         </Link>
