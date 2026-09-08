@@ -59,6 +59,23 @@ export default function DashboardShell() {
           <Outlet />
         </main>
       </div>
+
+      <nav className={styles.mobileBottom} aria-label="Dashboard mobile">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) => `${styles.mobileTab} ${isActive ? styles.mobileTabActive : ""}`}
+            >
+              <Icon size={20} stroke={2} />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
     </div>
   );
 }
