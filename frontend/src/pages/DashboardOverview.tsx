@@ -20,6 +20,7 @@ export default function DashboardOverview() {
             style={{ animationDelay: `${i * 0.08}s` }}
           >
             <div className={styles.kpiLabel}>{m.label}</div>
+            <div className={styles.kpiValue}>{m.value}</div>
           </div>
         ))}
       </div>

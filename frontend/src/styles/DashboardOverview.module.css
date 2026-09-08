@@ -69,6 +69,7 @@
 
 .sectionFlush {
   padding: 0;
+  margin-top: var(--space-6);
 }
 
 .steps {
