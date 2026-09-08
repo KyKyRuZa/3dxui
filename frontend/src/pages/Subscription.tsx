@@ -71,7 +71,7 @@ export default function Subscription() {
   const expired = !!sub?.expires_at && sub.expires_at <= Date.now();
 
   return (
-    <div className={`section ${styles.sectionFlush}`}>
+    <div className={styles.sectionFlush}>
       {error && <div className={styles.error}>{error}</div>}
 
       {expired ? (
@@ -133,9 +133,9 @@ export default function Subscription() {
                 <Button disabled={!sub} onClick={() => sub && copy(sub.vless, "vless")}>
                   {copied === "vless" ? "Скопировано" : "Скопировать VLESS"}
                 </Button>
-                <Button 
-                  variant="secondary" 
-                  disabled={!sub} 
+                <Button
+                  variant="secondary"
+                  disabled={!sub}
                   onClick={() => sub && copy(sub.subscription_url, "link")}
                 >
                   {copied === "link" ? "Скопировано" : "Скопировать ссылку"}
