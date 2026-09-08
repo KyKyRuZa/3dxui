@@ -40,7 +40,10 @@ describe("Subscription", () => {
     });
     renderWithAuth(<Subscription />);
     await waitFor(() =>
-      expect(screen.getByText(/Подписка активна до/)).toBeDefined()
+      expect(screen.getByText(/Подписка активна/)).toBeDefined()
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/осталось/)).toBeDefined()
     );
   });
 

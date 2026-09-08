@@ -73,76 +73,85 @@ export default function Subscription() {
     <div className={`section ${styles.sectionFlush}`}>
       {error && <div className={styles.error}>{error}</div>}
 
-      {expired && (
-        <div className={styles.expiredBanner}>
-          <div className={styles.expiredTitle}>
-            🚨 Подписка истекла — вы снова без защиты
+      {expired ? (
+        <div className={`${styles.statusBanner} ${styles.statusBannerExpired}`}>
+          <div className={styles.statusHeader}>
+            <div className={`${styles.statusIcon} ${styles.statusIconExpired}`}>🚨</div>
+            <div className={styles.statusTitle}>Подписка истекла</div>
           </div>
-          <p className={styles.expiredText}>
-            Пока без VPN нужные сайты и сервисы для вас закрыты. Верните доступ
-            одним тапом: купите тариф и получите готовый конфиг за минуту. Или
-            пригласите друга и получите <b>+7 дней бесплатно</b>.
+          <p className={styles.statusMeta}>
+            Вы снова без защиты. Верните доступ одним тапом: купите тариф и получите готовый конфиг за минуту.
+            Или пригласите друга и получите <strong>+7 дней бесплатно</strong>.
           </p>
-          <div className={styles.expiredActions}>
+          <div className={styles.actions}>
             <Button onClick={() => navigate("/pricing")}>
               🔑 Купить ключ VPN
             </Button>
           </div>
         </div>
-      )}
-
-      {sub?.expires_at && !expired && (
-        <div className={styles.activeBadge}>
-          ✅ Подписка активна до <b>{formatDate(sub.expires_at)}</b> (осталось{" "}
-          {daysLeft(sub.expires_at)})
-        </div>
-      )}
-
-      <div className="card">
-        <div className={styles.cardTitle}>QR код (VLESS)</div>
-        {qrUrl ? (
-          <div className={styles.qrWrap}>
-            <img src={qrUrl} alt="QR код" className={styles.qrImage} />
+      ) : sub?.expires_at ? (
+        <div className={`${styles.statusBanner} ${styles.statusBannerActive}`}>
+          <div className={styles.statusHeader}>
+            <div className={`${styles.statusIcon} ${styles.statusIconActive}`}>✅</div>
+            <div className={styles.statusTitle}>Подписка активна</div>
           </div>
-        ) : (
-          <div className={styles.keyBox}>Загрузка…</div>
-        )}
-        <div className={styles.actions}>
-          <Button disabled={!sub} onClick={() => sub && copy(sub.vless, "vless")}>
-            {copied === "vless" ? "Скопировано" : "Скопировать VLESS ссылку"}
-          </Button>
+          <p className={styles.statusMeta}>
+            До <strong>{formatDate(sub.expires_at)}</strong> (осталось <strong>{daysLeft(sub.expires_at)}</strong>)
+          </p>
         </div>
-      </div>
+      ) : null}
 
-      <div className={`card ${styles.cardMt}`}>
-        <div className={styles.cardTitle}>VLESS ссылка</div>
-        {sub ? (
-          <div className={styles.keyBox}>{sub.vless}</div>
-        ) : (
-          <div className={styles.keyBox}>Загрузка…</div>
-        )}
-        <div className={styles.actions}>
-          <Button disabled={!sub} onClick={() => sub && copy(sub.vless, "vless")}>
-            {copied === "vless" ? "Скопировано" : "Скопировать VLESS ссылку"}
-          </Button>
+      {sub && (
+        <div className={styles.configCard}>
+          <div className={styles.configGrid}>
+            <div className={styles.qrSection}>
+              {qrUrl ? (
+                <>
+                  <div className={styles.qrWrap}>
+                    <img src={qrUrl} alt="QR код" className={styles.qrImage} />
+                  </div>
+                  <div className={styles.qrLabel}>QR код (VLESS)</div>
+                </>
+              ) : (
+                <div className={styles.loadingState}>Загрузка QR…</div>
+              )}
+            </div>
+
+            <div className={styles.linksSection}>
+              <div className={styles.linkGroup}>
+                <div className={styles.linkLabel}>VLESS ссылка</div>
+                <div className={styles.linkBox}>{sub.vless}</div>
+              </div>
+
+              <div className={styles.linkGroup}>
+                <div className={styles.linkLabel}>Ссылка подписки</div>
+                <div className={styles.linkBox}>{sub.subscription_url}</div>
+              </div>
+
+              <div className={styles.actions}>
+                <Button disabled={!sub} onClick={() => sub && copy(sub.vless, "vless")}>
+                  {copied === "vless" ? "Скопировано" : "Скопировать VLESS"}
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  disabled={!sub} 
+                  onClick={() => sub && copy(sub.subscription_url, "link")}
+                >
+                  {copied === "link" ? "Скопировано" : "Скопировать ссылку"}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className={`card ${styles.cardMt}`}>
-        <div className={styles.cardTitle}>Ссылка подписки</div>
-        {sub ? (
-          <div className={styles.keyBox}>{sub.subscription_url}</div>
-        ) : (
-          <div className={styles.keyBox}>Загрузка…</div>
-        )}
-        <div className={styles.actions}>
-          <Button disabled={!sub} onClick={() => sub && copy(sub.subscription_url, "link")}>
-            {copied === "link" ? "Скопировано" : "Скопировать ссылку"}
-          </Button>
+      {!sub && !error && (
+        <div className="card">
+          <div className={styles.loadingState}>Загрузка конфигурации…</div>
         </div>
-      </div>
+      )}
 
-      <div className={`card ${styles.cardMt}`}>
+      <div className={styles.referralCard}>
         <Referral />
       </div>
     </div>

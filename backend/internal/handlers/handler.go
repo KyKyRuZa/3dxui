@@ -111,8 +111,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 		bill := api.Group("/billing")
 		{
-			bill.GET("/plans", middleware.AuthRequired(h.jwt), h.listPlans)
-			bill.POST("/create", middleware.AuthRequired(h.jwt), h.createPayment)
+		bill.GET("/plans", h.listPlans)
+		bill.POST("/create", middleware.AuthRequired(h.jwt), h.createPayment)
 			bill.POST("/webhook", h.billingWebhook)
 		}
 

@@ -12,43 +12,49 @@ export default function Settings() {
 	const [bindCode, setBindCode] = useState<string | null>(null);
 	const [botLink, setBotLink] = useState<string | null>(null);
 	const [loadingBind, setLoadingBind] = useState(false);
+	const [success, setSuccess] = useState("");
 
 	useEffect(() => {
-		// Check if Telegram is linked (this would need a new API endpoint or include in user profile)
-		// For now, we'll just show the bind option
-	}, []);
+		if (!success) return;
+		const t = setTimeout(() => setSuccess(""), 3000);
+		return () => clearTimeout(t);
+	}, [success]);
 
-	const handleGenerateBindCode = async () => {
-		setLoadingBind(true);
-		try {
-			const res = await fetch("/api/codes/bind", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
-				},
-			});
-			const data = await res.json();
-			if (!res.ok) {
-				alert(data.error || "Не удалось сгенерировать код.");
-				return;
-			}
-			setBindCode(data.code);
-			setBotLink(data.bot_link);
-		} catch {
-			alert("Ошибка сети. Попробуйте позже.");
-		} finally {
-			setLoadingBind(false);
-		}
-	};
+	const getAuthHeader = () => ({
+		Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+	});
+
+  const handleGenerateBindCode = async () => {
+    setLoadingBind(true);
+    setBindCode(null);
+    setBotLink(null);
+    try {
+      const res = await fetch("/api/codes/bind", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeader(),
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSuccess(data.error || "Не удалось сгенерировать код.");
+        return;
+      }
+      setBindCode(data.code);
+      setBotLink(data.bot_link);
+    } catch {
+      setSuccess("Ошибка сети. Попробуйте позже.");
+    } finally {
+      setLoadingBind(false);
+    }
+  };
 
   const handleExport = async () => {
     setExporting(true);
     try {
       const res = await fetch("/api/user/data-export", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
-        },
+        headers: getAuthHeader(),
       });
       if (!res.ok) throw new Error("export failed");
       const data = await res.json();
@@ -59,8 +65,9 @@ export default function Settings() {
       a.download = `walyny4-vpn-data-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
+      setSuccess("Данные экспортированы");
     } catch {
-      alert("Не удалось экспортировать данные. Попробуйте позже.");
+      setSuccess("Не удалось экспортировать данные.");
     } finally {
       setExporting(false);
     }
@@ -71,24 +78,27 @@ export default function Settings() {
     try {
       const res = await fetch("/api/user", {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
-        },
+        headers: getAuthHeader(),
       });
       if (!res.ok) throw new Error("delete failed");
       await logout();
       navigate("/");
     } catch {
-      alert("Не удалось удалить аккаунт. Попробуйте позже.");
+      setSuccess("Не удалось удалить аккаунт.");
       setDeleting(false);
     }
   };
 
   return (
     <div className={styles.page}>
+      {success && <div className={styles.success}>{success}</div>}
+
       <div className={styles.grid}>
-		<div className={styles.card}>
-          <h3 className={styles.title}>Аккаунт</h3>
+        <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardIcon}>👤</div>
+            <div className={styles.cardTitle}>Аккаунт</div>
+          </div>
           <div className={styles.form}>
             <div className={styles.field}>
               <label className={styles.label}>Пользователь</label>
@@ -101,7 +111,10 @@ export default function Settings() {
         </div>
 
         <div className={styles.card}>
-          <h3 className={styles.title}>🔗 Привязка Telegram</h3>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardIcon}>🔗</div>
+            <div className={styles.cardTitle}>Привязка Telegram</div>
+          </div>
           <div className={styles.form}>
             <p className={styles.hint}>
               Привяжите Telegram для быстрого входа через бота и получения уведомлений.
@@ -143,8 +156,11 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className={styles.card}>
-          <h3 className={styles.title}>Персональные данные (152-ФЗ)</h3>
+        <div className={`${styles.card} ${styles.spanFull}`}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardIcon}>🛡️</div>
+            <div className={styles.cardTitle}>Персональные данные (152-ФЗ)</div>
+          </div>
           <div className={styles.form}>
             <p className={styles.hint}>
               Вы имеете право на доступ к своим персональным данным и их удаление
