@@ -41,12 +41,6 @@ export default function Navbar() {
           </span>
           <span className={styles.brandText}>Walyny4 VPN</span>
         </Link>
-
-        <div className={styles.links}>
-          <Link to="/pricing">Тарифы</Link>
-          <Link to="/dashboard/instructions">Инструкции</Link>
-        </div>
-
         <div className={styles.actions}>
           {isAuthenticated ? (
             <>
@@ -101,15 +95,6 @@ export default function Navbar() {
             </div>
 
             <div className={styles.mobileLinks}>
-              <Link to="/pricing" className={styles.mobileLink}>
-                Тарифы
-              </Link>
-              <Link to="/dashboard/instructions" className={styles.mobileLink}>
-                Инструкции
-              </Link>
-              <Link to="/admin" className={styles.mobileLink}>
-                Admin
-              </Link>
               {!isAuthenticated && !isAuthPage && (
                 <Link to="/login" className={styles.mobileLink}>
                   Вход
