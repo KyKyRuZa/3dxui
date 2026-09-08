@@ -1,5 +1,5 @@
 import { useAuth } from "@hooks/useAuth";
-import { IconZap } from "@tabler/icons-react";
+import { IconBolt } from "@tabler/icons-react";
 import styles from "@styles/DashboardOverview.module.css";
 
 export default function DashboardOverview() {
@@ -29,7 +29,7 @@ export default function DashboardOverview() {
           <div className={styles.quickStart}>
             <div className={styles.quickStartHeader}>
               <div className={styles.quickStartIcon}>
-              <IconZap size={20} stroke={2} />
+              <IconBolt size={20} stroke={2} />
             </div>
               <div className={styles.cardTitle}>Быстрый старт</div>
             </div>
