@@ -656,6 +656,31 @@ ON CONFLICT (id) DO NOTHING`,
 	return true, nil
 }
 
+// ListPaymentsByUserID returns the authenticated user's payment history,
+// joined with plan names, ordered by creation time descending.
+func (s *Store) ListPaymentsByUserID(ctx context.Context, userID int64) ([]models.PaymentHistoryItem, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT p.id, p.plan_id, pl.name AS plan_name, p.status, p.amount_minor, p.currency, p.created_at
+FROM payments p
+JOIN plans pl ON pl.id = p.plan_id
+WHERE p.user_id = $1
+ORDER BY p.created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]models.PaymentHistoryItem, 0)
+	for rows.Next() {
+		var it models.PaymentHistoryItem
+		if err := rows.Scan(&it.ID, &it.PlanID, &it.PlanName, &it.Status, &it.AmountMinor, &it.Currency, &it.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
 // CreateRenewalNotification enqueues a bot notification about a renewed
 // subscription. Idempotent by user_id+expires_at to avoid duplicates on
 // webhook retries.

@@ -104,6 +104,18 @@ type PaymentRow struct {
 	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
 }
 
+// PaymentHistoryItem is a payment joined with its plan name for the
+// authenticated billing history endpoint.
+type PaymentHistoryItem struct {
+	ID          string    `db:"id" json:"id"`
+	PlanID      string    `db:"plan_id" json:"plan_id"`
+	PlanName    string    `db:"plan_name" json:"plan_name"`
+	Status      string    `db:"status" json:"status"`
+	AmountMinor int64     `db:"amount_minor" json:"amount_minor"`
+	Currency    string    `db:"currency" json:"currency"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+}
+
 // RenewalNotification is a pending bot notification about a subscription renewal.
 type RenewalNotification struct {
 	ID         int64        `db:"id" json:"id"`

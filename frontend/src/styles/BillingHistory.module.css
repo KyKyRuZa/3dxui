@@ -1,0 +1,113 @@
+.sectionFlush {
+  margin-top: var(--space-6);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.headerIcon {
+  display: inline-flex;
+  color: var(--color-text);
+}
+
+.headerTitle {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  margin: 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: var(--color-hover);
+}
+
+.cellDate {
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+
+.cellAmount {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: lowercase;
+}
+
+.statusSucceeded {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+
+.statusPending {
+  background: rgba(234, 179, 8, 0.12);
+  color: #b45309;
+}
+
+.statusCanceled,
+.statusFailed {
+  background: rgba(239, 68, 68, 0.10);
+  color: #dc2626;
+}
+
+.statusUnknown {
+  background: var(--color-hover);
+  color: var(--color-muted);
+}
+
+.emptyState {
+  color: var(--color-muted);
+  padding: var(--space-4) 0;
+}
+
+.loadingState {
+  color: var(--color-muted);
+  padding: var(--space-4) 0;
+}
+
+.error {
+  color: #dc2626;
+  padding: var(--space-3) 0;
+}

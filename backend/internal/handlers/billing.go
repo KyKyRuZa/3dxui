@@ -48,6 +48,22 @@ func (h *Handler) listPlans(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"plans": plans})
 }
 
+func (h *Handler) billingHistory(c *gin.Context) {
+	userID, ok := userIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	items, err := h.store.ListPaymentsByUserID(c.Request.Context(), userID)
+	if err != nil {
+		h.log.Errorw("billingHistory: store error", "userID", maskInt(userID), "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"payments": items})
+}
+
 func (h *Handler) createPayment(c *gin.Context) {
 	userID, ok := userIDFromContext(c)
 	if !ok {

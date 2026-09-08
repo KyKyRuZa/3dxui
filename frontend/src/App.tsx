@@ -16,6 +16,7 @@ const DashboardOverview = lazy(() => import("./pages/DashboardOverview"));
 const Subscription = lazy(() => import("./pages/Subscription"));
 const Instructions = lazy(() => import("./pages/Instructions"));
 const Settings = lazy(() => import("./pages/Settings"));
+const BillingHistory = lazy(() => import("./pages/BillingHistory"));
 const Admin = lazy(() => import("./pages/Admin"));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -58,6 +59,7 @@ export default function App() {
           >
             <Route index element={<DashboardOverview />} />
             <Route path="subscription" element={<Subscription />} />
+            <Route path="billing" element={<BillingHistory />} />
             <Route path="instructions" element={<Instructions />} />
             <Route path="settings" element={<Settings />} />
           </Route>
