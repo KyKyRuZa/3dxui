@@ -1,41 +1,84 @@
 .grid {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .item {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+  padding: var(--space-6);
+  background: var(--color-surface);
+  position: relative;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.item:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.item:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.item:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.item:nth-child(4) {
+  animation-delay: 0.2s;
+}
+
+.item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 60%);
+}
+
+.item:hover {
+  border-color: rgba(212, 168, 67, 0.3);
+  transform: translateY(-2px);
 }
 
 .icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, rgba(0, 212, 170, 0.2), rgba(59, 130, 246, 0.2));
+  background: linear-gradient(135deg, rgba(212, 168, 67, 0.15), rgba(184, 146, 46, 0.15));
   color: var(--color-primary);
   font-weight: 800;
+  box-shadow: var(--shadow-glow);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
 }
 
 .title {
-  margin-top: 12px;
-  font-weight: 700;
-  font-size: 16px;
+  margin-top: var(--space-3);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .desc {
-  margin-top: 8px;
+  margin-top: var(--space-2);
   color: var(--color-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
 }
 
 @media (min-width: 640px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item {
+    animation: none;
+    opacity: 1;
   }
 }

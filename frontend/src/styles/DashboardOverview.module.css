@@ -1,25 +1,42 @@
 .kpis {
   display: grid;
-  gap: 16px;
+  gap: var(--space-4);
   grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
 .kpi {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+  padding: var(--space-5);
+  background: var(--color-surface);
+  position: relative;
+}
+
+.kpi::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 60%);
 }
 
 .kpiLabel {
   color: var(--color-muted);
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .kpiValue {
-  margin-top: 6px;
-  font-size: 24px;
-  font-weight: 800;
+  margin-top: var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.02em;
 }
 
 @media (min-width: 640px) {
@@ -29,12 +46,16 @@
 }
 
 .cardTitle {
-  font-weight: 700;
-  margin-bottom: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-lg);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .cardMb {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .sectionFlush {
@@ -42,13 +63,19 @@
 }
 
 .subValue {
-  font-size: 14px;
+  font-size: var(--text-md);
   word-break: break-all;
+  color: var(--color-text);
+  font-family: var(--font-mono);
 }
 
 .steps {
-  padding-left: 18px;
+  padding-left: var(--space-5);
   color: var(--color-muted);
-  font-size: 14px;
-  line-height: 2;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.steps li::marker {
+  color: var(--color-primary);
 }

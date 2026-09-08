@@ -1,69 +1,95 @@
 .wrap {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-4);
 }
 
 .title {
-  font-weight: 700;
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-xl);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .lead {
   color: var(--color-muted);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
   margin: 0;
 }
 
 .metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .metric {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: var(--space-4);
   text-align: center;
   background: var(--color-surface);
+  position: relative;
+}
+
+.metric::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 60%);
 }
 
 .metricValue {
-  font-size: 26px;
-  font-weight: 800;
-  color: var(--color-text);
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  letter-spacing: 0.02em;
 }
 
 .metricLabel {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-muted);
-  margin-top: 4px;
+  margin-top: var(--space-1);
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .linkLabel {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-muted);
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .linkBox {
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
-  padding: 14px;
-  background: var(--color-surface);
+  padding: var(--space-4);
+  background: var(--color-surface-2);
   word-break: break-all;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   color: var(--color-muted);
+  line-height: var(--leading-relaxed);
 }
 
 .actions {
-  margin-top: 4px;
+  margin-top: var(--space-3);
 }
 
 .error {
   color: var(--color-danger);
-  margin-bottom: 12px;
-  font-size: 14px;
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
 }

@@ -1,17 +1,29 @@
 .footer {
-  border-top: 1px solid var(--color-border);
-  padding: 32px 0;
+  border-top: 1px solid var(--color-border-subtle);
+  padding: var(--space-6) 0;
   color: var(--color-muted);
-  font-size: 14px;
+  font-size: var(--text-sm);
+  position: relative;
+}
+
+.footer::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 168, 67, 0.2), transparent);
+  pointer-events: none;
 }
 
 .inner {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   justify-content: space-between;
   align-items: center;
-  max-width: 1200px;
+  max-width: var(--bp-xl);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 var(--space-6);
 }

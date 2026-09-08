@@ -1,13 +1,13 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 @media (min-width: 860px) {
@@ -20,72 +20,96 @@
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   border-radius: var(--radius-md);
-  padding: 20px;
+  padding: var(--space-5);
+  position: relative;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--color-primary), transparent);
+  opacity: 0.4;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  pointer-events: none;
 }
 
 .title {
-  font-size: 14px;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--color-text);
-  margin: 0 0 16px;
-  letter-spacing: 0.2px;
+  margin: 0 0 var(--space-4);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-2);
 }
 
 .label {
-  font-size: 12px;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--color-muted);
-  letter-spacing: 0.2px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .input {
-  padding: 10px 12px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-surface-2);
   color: var(--color-text);
-  font-size: 13px;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(0, 212, 170, 0.1);
+  box-shadow: var(--shadow-focus);
 }
 
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 4px;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 .btnSecondary {
-  padding: 10px 16px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--color-surface-2);
   color: var(--color-text);
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .btnSecondary:hover {
-  border-color: var(--color-primary);
+  border-color: var(--color-muted);
+  background: var(--color-surface-3);
 }
 
 .btnSecondary:disabled {
@@ -94,12 +118,16 @@
 }
 
 .btnDanger {
-  padding: 10px 16px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-danger);
   background: transparent;
   color: var(--color-danger);
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: background 0.15s ease;
 }
@@ -114,36 +142,42 @@
 }
 
 .confirm {
-  padding: 12px;
+  padding: var(--space-4);
   background: rgba(239, 68, 68, 0.05);
   border: 1px solid rgba(239, 68, 68, 0.15);
   border-radius: var(--radius-sm);
 }
 
 .confirm p {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
   color: var(--color-text);
+  line-height: var(--leading-relaxed);
 }
 
 .confirmActions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .tgButton {
-  padding: 10px 16px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   border: none;
-  background: #0088cc;
-  color: #fff;
-  font-size: 13px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: var(--shadow-glow);
+  transition: background 0.12s ease;
 }
 
 .tgButton:hover {
-  background: #0077b5;
+  background: var(--color-primary-600);
 }
 
 .tgButton:disabled {
@@ -154,45 +188,49 @@
 .bindCode {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  background: rgba(0, 136, 204, 0.05);
-  border: 1px solid rgba(0, 136, 204, 0.15);
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: rgba(245, 158, 11, 0.04);
+  border: 1px solid rgba(245, 158, 11, 0.15);
   border-radius: var(--radius-sm);
 }
 
 .codeBox {
   display: block;
-  padding: 8px 12px;
-  background: var(--color-surface-2, #1a1e27);
-  border-radius: 6px;
-  font-family: monospace;
-  font-size: 14px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
   text-align: center;
-  color: var(--color-text);
+  color: var(--color-primary);
+  letter-spacing: 0.1em;
 }
 
 .tgLink {
-  color: #0088cc;
+  color: var(--color-primary);
   text-decoration: underline;
   text-align: center;
-  font-size: 14px;
+  font-size: var(--text-sm);
+  text-underline-offset: 3px;
 }
 
 .error {
   color: var(--color-danger);
-  font-size: 13px;
-  padding: 10px 12px;
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4);
   background: rgba(239, 68, 68, 0.08);
   border-radius: var(--radius-sm);
   border: 1px solid rgba(239, 68, 68, 0.15);
+  line-height: var(--leading-relaxed);
 }
 
 .success {
   color: var(--color-success);
-  font-size: 13px;
-  padding: 10px 12px;
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4);
   background: rgba(34, 197, 94, 0.08);
   border-radius: var(--radius-sm);
   border: 1px solid rgba(34, 197, 94, 0.15);
+  line-height: var(--leading-relaxed);
 }

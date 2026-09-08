@@ -8,7 +8,8 @@ export default function Hero() {
       <div className="container">
         <h1 className={styles.title}>
           Защита ваших данных
-          <br />в любой сети
+          <br />
+          <span className={styles.accent}>в любой сети</span>
         </h1>
         <p className={styles.subtitle}>
           Шифрование трафика, приватность и стабильность. Безопасный доступ к вашим ресурсам из
@@ -23,6 +24,7 @@ export default function Hero() {
           </Link>
         </div>
       </div>
+      <div className={styles.heroFade} aria-hidden="true" />
     </section>
   );
 }
