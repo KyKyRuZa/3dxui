@@ -1,19 +1,16 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { IconHeartHandshake, IconCopy } from "@tabler/icons-react";
 import { Button } from "@components/Button";
-import { getReferral, type ReferralStats } from "@api/referral";
+import type { ReferralStats } from "@api/referral";
 import styles from "@styles/Referral.module.css";
 
-export default function Referral() {
-  const [stats, setStats] = useState<ReferralStats | null>(null);
+type Props = {
+  stats: ReferralStats | null;
+};
+
+export default function Referral({ stats }: Props) {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    getReferral()
-      .then(setStats)
-      .catch(() => setError("Не удалось загрузить реферальную программу"));
-  }, []);
 
   const link = stats
     ? `https://t.me/${stats.bot_username}?start=${stats.referral_code}`

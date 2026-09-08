@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@components/Button";
 import { useAuth } from "@hooks/useAuth";
 import { activateSubscription, type Subscription as Sub } from "@api/subscription";
+import { getReferral, type ReferralStats } from "@api/referral";
 import Referral from "@components/Referral";
 import styles from "@styles/Subscription.module.css";
 
@@ -30,6 +31,7 @@ export default function Subscription() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<"link" | "vless" | null>(null);
   const [qrUrl, setQrUrl] = useState("");
+  const [referral, setReferral] = useState<ReferralStats | null>(null);
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -44,6 +46,12 @@ export default function Subscription() {
       .then(setSub)
       .catch(() => setError("Не удалось активировать подписку"));
   }, [user?.id]);
+
+  useEffect(() => {
+    getReferral()
+      .then(setReferral)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!sub?.vless) return;
@@ -153,7 +161,7 @@ export default function Subscription() {
       )}
 
       <div className={styles.referralCard}>
-        <Referral />
+        <Referral stats={referral} />
       </div>
     </div>
   );
