@@ -1,7 +1,17 @@
-import { IconBrandApple, IconBrandWindows, IconBrandUbuntu, IconStar } from "@tabler/icons-react";
+import { IconBrandApple, IconBrandWindows, IconBrandUbuntu, IconBrandAndroid, IconStar } from "@tabler/icons-react";
 import styles from "@styles/Instructions.module.css";
 
 const platforms = [
+  {
+    icon: <IconBrandAndroid size={24} />,
+    title: "Android",
+    steps: [
+      "Установите Happ из Google Play.",
+      "Откройте Happ → вкладка «Профили» → «+».",
+      "Отсканируйте QR со страницы «Подписка» или вставьте VLESS-ссылку.",
+      "Нажмите «Подключить» — появится статус «Активен».",
+    ],
+  },
   {
     icon: <IconBrandApple size={24} />,
     title: "iOS / iPadOS",
