@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { IconHeartHandshake } from "@tabler/icons-react";
+import { IconHeartHandshake, IconCopy } from "@tabler/icons-react";
 import { Button } from "@components/Button";
 import { getReferral, type ReferralStats } from "@api/referral";
 import styles from "@styles/Referral.module.css";
@@ -56,7 +56,17 @@ export default function Referral() {
           </div>
 
           <div className={styles.linkLabel}>Ваша реферальная ссылка</div>
-          <div className={styles.linkBox}>{link}</div>
+          <div className={styles.linkBoxWrap}>
+            <div className={styles.linkBox}>{link}</div>
+            <button
+              type="button"
+              className={styles.copyIconBtn}
+              onClick={copy}
+              title={copied ? "Скопировано" : "Скопировать"}
+            >
+              <IconCopy size={16} />
+            </button>
+          </div>
           <div className={styles.actions}>
             <Button block onClick={copy}>
               {copied ? "Скопировано" : "Скопировать ссылку"}
