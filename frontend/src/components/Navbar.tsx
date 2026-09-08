@@ -94,23 +94,28 @@ export default function Navbar() {
               </button>
             </div>
 
-            <div className={styles.mobileLinks}>
-              {!isAuthenticated && !isAuthPage && (
-                <Link to="/login" className={styles.mobileLink}>
-                  Вход
-                </Link>
-              )}
-              {!isAuthenticated && !isAuthPage && (
-                <Link to="/register" className={styles.mobileLink}>
-                  Регистрация
-                </Link>
-              )}
-              {isAuthenticated && (
-                <button onClick={logout} className={styles.mobileLinkDanger}>
-                  Выйти
-                </button>
-              )}
-            </div>
+             <div className={styles.mobileLinks}>
+               {isAuthenticated && (
+                 <Link to="/dashboard" className={styles.mobileLink}>
+                   Профиль
+                 </Link>
+               )}
+               {!isAuthenticated && !isAuthPage && (
+                 <Link to="/login" className={styles.mobileLink}>
+                   Вход
+                 </Link>
+               )}
+               {!isAuthenticated && !isAuthPage && (
+                 <Link to="/register" className={styles.mobileLink}>
+                   Регистрация
+                 </Link>
+               )}
+               {isAuthenticated && (
+                 <button onClick={logout} className={styles.mobileLinkDanger}>
+                   Выйти
+                 </button>
+               )}
+             </div>
           </div>
         </div>
       </div>
