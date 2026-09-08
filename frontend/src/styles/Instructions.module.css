@@ -70,6 +70,22 @@
   padding-left: calc(40px + var(--space-3));
 }
 
+.itemSteps {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  padding-left: calc(40px + var(--space-3));
+  margin: 0;
+}
+
+.itemSteps li {
+  margin-bottom: var(--space-2);
+}
+
+.itemSteps li:last-child {
+  margin-bottom: 0;
+}
+
 .recommended {
   margin-top: var(--space-6);
   padding: var(--space-5) var(--space-6);

@@ -1,42 +1,56 @@
-import { IconRobot, IconBrandApple, IconBrandWindows, IconBrandUbuntu, IconStar } from "@tabler/icons-react";
+import { IconBrandApple, IconBrandWindows, IconBrandUbuntu, IconStar } from "@tabler/icons-react";
 import styles from "@styles/Instructions.module.css";
 
-const items = [
-  {
-    icon: <IconRobot size={24} />,
-    title: "Android",
-    desc: "Скачайте клиентское приложение, добавьте профиль через «Добавить профиль».",
-  },
+const platforms = [
   {
     icon: <IconBrandApple size={24} />,
-    title: "iOS",
-    desc: "Отсканируйте QR или импортируйте ссылку в приложение.",
+    title: "iOS / iPadOS",
+    steps: [
+      "Установите Happ из App Store.",
+      "Откройте Happ → вкладка «Подписки» → «Добавить».",
+      "Отсканируйте QR-код со страницы «Подписка» или вставьте ссылку подписки.",
+      "Подключите профиль — появится зелёная галочка.",
+    ],
   },
   {
     icon: <IconBrandWindows size={24} />,
     title: "Windows",
-    desc: "Добавьте профиль через импорт конфигурации в клиентском ПО.",
+    steps: [
+      "Скачайте Happ для Windows и установите.",
+      "Откройте Happ → «Профили» → «Импорт».",
+      "Отсканируйте QR-код или вставьте VLESS-ссылку со страницы «Подписка».",
+      "Двойной клик по профилю → «Подключиться».",
+    ],
   },
   {
     icon: <IconBrandUbuntu size={24} />,
     title: "macOS / Linux",
-    desc: "Импортируйте подписку через клиентское приложение.",
+    steps: [
+      "Скачайте Happ для вашей ОС и установите.",
+      "Запустите Happ → «Добавить профиль».",
+      "Импортируйте через QR или ссылку подписки.",
+      "Включите профиль — статус «Активна».",
+    ],
   },
 ];
 
-const recommended = "Рекомендуемое приложение — Happ: универсальный клиент для всех платформ.";
+const recommended = "Для работы используется только Happ — универсальный клиент VLESS. Скачайте его на нужное устройство, импортируйте профиль и нажмите «Подключиться». Если приложение не открывается автоматически после установки — проверьте права в настройках системы.";
 
 export default function Instructions() {
   return (
     <div className={`section ${styles.sectionFlush}`}>
       <div className={styles.grid}>
-        {items.map((it) => (
+        {platforms.map((it) => (
           <div key={it.title} className={styles.item}>
             <div className={styles.itemHeader}>
               <div className={styles.itemIcon}>{it.icon}</div>
               <div className={styles.itemTitle}>{it.title}</div>
             </div>
-            <p className={styles.itemDesc}>{it.desc}</p>
+            <ol className={styles.itemSteps}>
+              {it.steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
           </div>
         ))}
       </div>
