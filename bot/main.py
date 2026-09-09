@@ -561,6 +561,10 @@ async def cmd_fix(message: types.Message) -> None:
 @dp.message(Command("link"))
 async def cmd_link(message: types.Message) -> None:
     """Generate a login code for the user to authenticate on the website."""
+    try:
+        await backend_ensure_user(message.from_user.id, message.from_user.first_name, pending_refs.get(message.from_user.id))
+    except Exception as e:  # noqa: BLE001
+        logger.debug("link: ensure user failed: %s", e)
     code = await backend_generate_login_code(message.from_user.id)
     if code:
         await message.answer(
