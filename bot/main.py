@@ -30,6 +30,7 @@ if not BOT_TOKEN:
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8080")
 BOT_API_SECRET = os.getenv("BOT_API_SECRET", "")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://thenomoreblocks.com")
+PRICING_WEB_APP_URL = os.getenv("PRICING_WEB_APP_URL", WEB_APP_URL.rstrip("/") + "/pricing")
 NOTIFY_INTERVAL = int(os.getenv("NOTIFY_INTERVAL", "3600"))
 MONITORING_CHAT_ID = os.getenv("MONITORING_CHAT_ID", "")
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()}
@@ -263,7 +264,8 @@ async def backend_notifications() -> list[dict]:
 def main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🔑 Купить ключ VPN", callback_data="buy")],
+            [InlineKeyboardButton(text="🛒 Купить тариф", web_app=types.WebAppInfo(url=PRICING_WEB_APP_URL))],
+            [InlineKeyboardButton(text="🔑 Получить пробный ключ", callback_data="buy")],
             [InlineKeyboardButton(text="📊 Моя подписка", callback_data="status")],
             [InlineKeyboardButton(text="🤝 Реферальная программа", callback_data="referral")],
             [InlineKeyboardButton(text="🔧 Починить доступ к сайту", callback_data="fix")],
@@ -327,6 +329,54 @@ def format_expiry(data: dict) -> str | None:
     return f"🚨 <b>Подписка истекла {dt.strftime('%d.%m.%Y %H:%M UTC')}!</b> Вы снова без защиты. Нажмите 🔑 Купить ключ VPN прямо сейчас — и вернёте доступ за минуту."
 
 
+def days_left_from_expiry(exp: int | None) -> int | None:
+    if not exp:
+        return None
+    now = datetime.now(timezone.utc)
+    dt = datetime.fromtimestamp(exp / 1000, tz=timezone.utc)
+    return int((dt - now).total_seconds() / 86400)
+
+
+async def get_user_menu_keyboard(telegram_id: int) -> InlineKeyboardMarkup:
+    data = await backend_get_user(telegram_id)
+    sub_buttons: list[list[InlineKeyboardButton]] = []
+    top_buttons: list[InlineKeyboardButton] = []
+    days_text = ""
+    if data and data.get("provisioned") and data.get("expires_at"):
+        days = days_left_from_expiry(data.get("expires_at"))
+        if days is not None and days >= 0:
+            days_text = f" (осталось {days} дн.)" if days > 0 else " (истекла!)"
+        if days is None or days < 0:
+            top_buttons = [
+                InlineKeyboardButton(text="🛒 Купить тариф", web_app=types.WebAppInfo(url=PRICING_WEB_APP_URL)),
+                InlineKeyboardButton(text="🔑 Получить пробный ключ", callback_data="buy"),
+            ]
+        else:
+            top_buttons = [
+                InlineKeyboardButton(text="📊 Моя подписка" + days_text, callback_data="status"),
+                InlineKeyboardButton(text="🛒 Купить тариф", web_app=types.WebAppInfo(url=PRICING_WEB_APP_URL)),
+            ]
+    else:
+        top_buttons = [
+            InlineKeyboardButton(text="🛒 Купить тариф", web_app=types.WebAppInfo(url=PRICING_WEB_APP_URL)),
+            InlineKeyboardButton(text="🔑 Получить пробный ключ", callback_data="buy"),
+        ]
+        sub_buttons = [
+            [InlineKeyboardButton(text="📊 Моя подписка", callback_data="status")],
+        ]
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            *([btn] for btn in top_buttons),
+            *sub_buttons,
+            [InlineKeyboardButton(text="🤝 Реферальная программа", callback_data="referral")],
+            [InlineKeyboardButton(text="🔧 Починить доступ к сайту", callback_data="fix")],
+            [InlineKeyboardButton(text="📖 Инструкция", callback_data="instructions")],
+            [InlineKeyboardButton(text="🪝 Открыть WebApp", web_app=types.WebAppInfo(url=WEB_APP_URL))],
+        ]
+    )
+
+
 def format_config_message(data: dict) -> str:
     lines = ["<b>🔐 Ваш VPN-ключ готов!</b>\n"]
     if data.get("subscription_url"):
@@ -384,8 +434,10 @@ async def deliver_key(message: types.Message, telegram_id: int, first_name: str 
         "✅ Готово! Установите клиент <b>Happ</b> и импортируйте подписку или конфиг выше. "
         "В Happ зайдите в <b>Настройки → ПИНГ</b> и выберите <b>TCP</b> для стабильной скорости.\n\n"
         "💡 Если вы на WiFi и сайт не открывается — включите мобильный хотспот, выполните эти шаги, "
-        "а потом вернитесь на WiFi. Сам VPN работает на любом соединении.",
-        reply_markup=main_menu_keyboard(),
+        "а потом вернитесь на WiFi. Сам VPN работает на любом соединении.\n\n"
+        "🔥 <b>Нужно больше дней без ограничений?</b> Нажмите <b>🛒 Купить тариф</b> — подписка активируется сразу после оплаты.\n"
+        "🤝 <b>Хотите бесплатные дни?</b> Пригласите друга по реферальной ссылке — вы получите +7 дней за каждую его покупку.",
+        reply_markup=await get_user_menu_keyboard(telegram_id),
     )
 
 
@@ -403,13 +455,13 @@ async def cmd_start(message: types.Message) -> None:
                     "✅ <b>Telegram привязан к аккаунту!</b>\n\n"
                     "Теперь вы можете входить на сайт через код из бота.\n"
                     "Используйте /link для получения кода входа.",
-                    reply_markup=main_menu_keyboard(),
+                    reply_markup=await get_user_menu_keyboard(message.from_user.id),
                 )
             else:
                 await message.answer(
                     "❌ <b>Не удалось привязать Telegram.</b>\n\n"
                     "Код недействителен или истёк. Получите новый код на сайте.",
-                    reply_markup=main_menu_keyboard(),
+                    reply_markup=await get_user_menu_keyboard(message.from_user.id),
                 )
             return
 
@@ -419,17 +471,18 @@ async def cmd_start(message: types.Message) -> None:
                 await message.answer(
                     "✅ <b>Вход подтверждён!</b>\n\n"
                     "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
-                    reply_markup=main_menu_keyboard(),
+                    reply_markup=await get_user_menu_keyboard(message.from_user.id),
                 )
                 return
         else:
             pending_refs[message.from_user.id] = param
     await message.answer(
         "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
-        "Я выдаю и доставляю ваши VPN-ключи прямо сюда в Telegram.\n"
-        "Нажмите <b>🔑 Купить ключ VPN</b>, чтобы получить конфиг для обхода блокировок.\n\n"
-        "🔐 <b>Уже есть аккаунт на сайте?</b> Используйте /link для входа через Telegram.",
-        reply_markup=main_menu_keyboard(),
+        "Получите готовый VPN-конфиг за минуту — обходите блокировки, сохраняйте приватность и возвращайте доступ к нужным сайтам.\n\n"
+        "🛒 <b>Хотите полный доступ без ограничений?</b> Нажмите <b>Купить тариф</b> — подписка активируется автоматически после оплаты.\n"
+        "🔑 Или начните с <b>пробного ключа</b> — он выдаётся бесплатно на 2 дня.\n\n"
+        "💡 Если на WiFi не открывается сайт — включите мобильный хотспот и получите ключ через мобильную сеть. Сам VPN работает на любом соединении.",
+        reply_markup=await get_user_menu_keyboard(message.from_user.id),
     )
 
 
@@ -437,7 +490,7 @@ async def cmd_start(message: types.Message) -> None:
 async def cmd_referral(message: types.Message) -> None:
     data = await backend_referral(message.from_user.id)
     if not data or not data.get("referral_code"):
-        await message.answer("Реферальная программа пока недоступна.", reply_markup=main_menu_keyboard())
+        await message.answer("Реферальная программа пока недоступна.", reply_markup=await get_user_menu_keyboard(message.from_user.id))
         return
     me = await bot.get_me()
     link = f"https://t.me/{me.username}?start={data['referral_code']}"
@@ -448,7 +501,7 @@ async def cmd_referral(message: types.Message) -> None:
         f"Начислено бонусных дней: <b>{data['earned_days']}</b>\n\n"
         f"За каждого друга, купившего платный тариф, вы получите +7 дней к подписке. "
         f"Друг, перешедший по ссылке, получает бонус к пробному периоду.",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=await get_user_menu_keyboard(message.from_user.id),
     )
 
 
@@ -471,10 +524,10 @@ async def cmd_status(message: types.Message) -> None:
             "🔥 Не откладывайте — каждый час без VPN это упущенная свобода. Верните доступ прямо сейчас!\n\n"
             "💡 Если на WiFi не открывается сайт — включите мобильный хотспот и получите ключ через мобильную сеть."
             + referral_anchor(link),
-            reply_markup=main_menu_keyboard(),
+            reply_markup=await get_user_menu_keyboard(message.from_user.id),
         )
         return
-    await message.answer(format_config_message(data), reply_markup=main_menu_keyboard())
+    await message.answer(format_config_message(data), reply_markup=await get_user_menu_keyboard(message.from_user.id))
 
 
 @dp.message(Command("buy"))
@@ -514,12 +567,12 @@ async def cmd_link(message: types.Message) -> None:
             f"🔐 <b>Код для входа на сайт:</b> <code>{code}</code>\n\n"
             "Введите этот код на сайте в разделе «Войти через Telegram».\n"
             "Код действителен 5 минут.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=await get_user_menu_keyboard(message.from_user.id),
         )
     else:
         await message.answer(
             "❌ Не удалось сгенерировать код. Убедитесь, что вы начали диалог с ботом.",
-            reply_markup=main_menu_keyboard(),
+            reply_markup=await get_user_menu_keyboard(message.from_user.id),
         )
 
 
@@ -554,7 +607,7 @@ async def callbacks(callback: types.CallbackQuery):
                 f"За каждого друга, купившего платный тариф, вы получите +7 дней к подписке."
             )
         if callback.message is not None:
-            await callback.message.answer(text, reply_markup=main_menu_keyboard())
+            await callback.message.answer(text, reply_markup=await get_user_menu_keyboard(callback.from_user.id))
         return
     if callback.data == "status":
         data = await backend_get_user(callback.from_user.id)
@@ -573,7 +626,7 @@ async def callbacks(callback: types.CallbackQuery):
         else:
             text = format_config_message(data)
         if callback.message is not None:
-            await callback.message.answer(text, reply_markup=main_menu_keyboard())
+            await callback.message.answer(text, reply_markup=await get_user_menu_keyboard(callback.from_user.id))
         return
     if callback.data == "fix":
         if callback.message is not None:
@@ -596,7 +649,7 @@ async def callbacks(callback: types.CallbackQuery):
         )
         ok = await send_hosts_script(callback.message, FIX_WINDOWS_PATH, caption)
         if ok and callback.message is not None:
-            await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
+            await callback.message.answer("✅ Готово!", reply_markup=await get_user_menu_keyboard(callback.from_user.id))
         return
     if callback.data == "fix_macos":
         caption = (
@@ -610,7 +663,7 @@ async def callbacks(callback: types.CallbackQuery):
         )
         ok = await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
         if ok and callback.message is not None:
-            await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
+            await callback.message.answer("✅ Готово!", reply_markup=await get_user_menu_keyboard(callback.from_user.id))
         return
     if callback.data == "fix_linux":
         caption = (
@@ -624,7 +677,7 @@ async def callbacks(callback: types.CallbackQuery):
         )
         ok = await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
         if ok and callback.message is not None:
-            await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
+            await callback.message.answer("✅ Готово!", reply_markup=await get_user_menu_keyboard(callback.from_user.id))
         return
     if callback.data == "instructions":
         text = (
@@ -638,7 +691,7 @@ async def callbacks(callback: types.CallbackQuery):
             "выполните эти шаги, а потом вернитесь на WiFi. Туннель работает на любом соединении."
         )
         if callback.message is not None:
-            await callback.message.answer(text, reply_markup=main_menu_keyboard())
+            await callback.message.answer(text, reply_markup=await get_user_menu_keyboard(callback.from_user.id))
         return
 
 
@@ -679,7 +732,7 @@ async def send_expiry_notifications() -> int:
             )
         text += referral_anchor(await referral_link(tg_id))
         try:
-            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            await bot.send_message(tg_id, text, reply_markup=await get_user_menu_keyboard(tg_id))
             sent += 1
         except TelegramBadRequest as e:
             logger.warning("cannot notify %s: %s", tg_id, e)
@@ -704,17 +757,50 @@ async def send_expired_notifications() -> int:
             dt = datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
             when = dt.strftime("%d.%m.%Y %H:%M UTC")
         text = (
-            "🚨 <b>Доступ перекрыт — вы снова в изоляции.</b>\n\n"
-            f"С <b>{when}</b> нужные сайты и сервисы для вас снова закрыты, а каждый час без защиты — "
-            "это упущенная свобода и лишние риски.\n\n"
-            "⚡ <b>Верните всё одним тапом:</b> нажмите <b>🔑 Купить ключ VPN</b> — и через минуту у вас будет "
-            "свежий конфиг для обхода блокировок (Hiddify / v2rayNG / Sing-box).\n\n"
-            "🔥 Не откладывайте: пока вы раздумываете, доступ не вернётся сам. "
-            "Действуйте прямо сейчас и снова будьте везде."
+            "🚨 <b>Ваша подписка истекла.</b>\n\n"
+            "Доступ к VPN сейчас отключён, но вернуть его очень просто.\n\n"
+            "⚡ <b>Действуйте:</b>\n"
+            "• <b>🛒 Купить тариф</b> — платёж через ЮKassa, подписка активируется автоматически.\n"
+            "• <b>🔑 Пробный ключ</b> — получите бесплатный доступ на 2 дня, чтобы быстро вернуться в сеть.\n\n"
+            "💡 Если на WiFi не открывается сайт — включите мобильный хотспот и выполните покупку через мобильную сеть."
         )
         text += referral_anchor(await referral_link(tg_id))
         try:
-            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            await bot.send_message(tg_id, text, reply_markup=await get_user_menu_keyboard(tg_id))
+            sent += 1
+        except TelegramBadRequest as e:
+            logger.warning("cannot notify %s: %s", tg_id, e)
+    return sent
+
+
+async def send_retargeting_notifications() -> int:
+    try:
+        expired = await backend_expired(hours=96)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("failed to fetch retargeting users: %s", e)
+        return 0
+
+    now = datetime.now(timezone.utc)
+    sent = 0
+    for item in expired:
+        tg_id = item.get("telegram_id")
+        expires_at = item.get("expires_at", 0)
+        if not tg_id or not expires_at:
+            continue
+        dt = datetime.fromtimestamp(expires_at / 1000, tz=timezone.utc)
+        hours_since_expiry = (now - dt).total_seconds() / 3600
+        if hours_since_expiry < 72 or hours_since_expiry > 96:
+            continue
+        text = (
+            "🥹 <b>Мы скучаем по вам!</b>\n\n"
+            "Ваш VPN до сих пор отключён, а мы уже подготовили для вас бонус.\n\n"
+            "🎁 <b>Вернитесь и получите +2 дня бесплатно</b> при покупке любого тарифа.\n"
+            "Это наш подарок за то, что вы снова с нами.\n\n"
+            "🛒 Нажмите <b>Купить тариф</b> — бонус спишется автоматически."
+        )
+        text += referral_anchor(await referral_link(tg_id))
+        try:
+            await bot.send_message(tg_id, text, reply_markup=await get_user_menu_keyboard(tg_id))
             sent += 1
         except TelegramBadRequest as e:
             logger.warning("cannot notify %s: %s", tg_id, e)
@@ -746,7 +832,7 @@ async def send_renewal_notifications() -> int:
         )
         text += referral_anchor(await referral_link(tg_id))
         try:
-            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            await bot.send_message(tg_id, text, reply_markup=await get_user_menu_keyboard(tg_id))
             sent += 1
         except TelegramBadRequest as e:
             logger.warning("cannot notify %s: %s", tg_id, e)
@@ -766,9 +852,16 @@ def render_bot_notification(kind: str, data: dict) -> str | None:
     if kind == "referral_reward":
         days = data.get("reward_days", 7)
         return (
-            f"🎁 <b>Вам начислено +{days} дней!</b>\n\n"
-            "Друг купил тариф по вашей ссылке — бонус зачислен, ваша подписка продлена. "
-            "Спасибо, что приводите друзей! 🚀"
+            f"🎁 <b>Промокод активирован!</b>\n\n"
+            f"Вам начислено <b>+{days} дней</b> по реферальной ссылке. "
+            "Ваша подписка продлена. Спасибо, что приводите друзей! 🚀"
+        )
+    if kind == "referral_paid_bonus":
+        days = data.get("reward_days", 2)
+        return (
+            f"🎁 <b>Вам начислено +{days} дней за реферальный бонус!</b>\n\n"
+            "Вы перешли по реферальной ссылке и оплатили тариф — бонус зачислен. "
+            "Ваша подписка продлена. Спасибо, что.join нас! 🚀"
         )
     if kind == "payment_failed":
         return (
@@ -797,7 +890,7 @@ async def send_bot_notifications() -> int:
         if not text:
             continue
         try:
-            await bot.send_message(tg_id, text, reply_markup=main_menu_keyboard())
+            await bot.send_message(tg_id, text, reply_markup=await get_user_menu_keyboard(tg_id))
             sent += 1
         except TelegramBadRequest as e:
             logger.warning("cannot notify %s: %s", tg_id, e)
@@ -814,6 +907,9 @@ async def notification_loop() -> None:
             sent_expired = await send_expired_notifications()
             if sent_expired:
                 logger.info("sent %d expired-subscription nudges", sent_expired)
+            sent_retarget = await send_retargeting_notifications()
+            if sent_retarget:
+                logger.info("sent %d retargeting notifications", sent_retarget)
             sent_renewed = await send_renewal_notifications()
             if sent_renewed:
                 logger.info("sent %d renewal notifications", sent_renewed)

@@ -146,9 +146,10 @@ def test_main_menu_keyboard_structure():
     kb = main_menu_keyboard()
     assert kb is not None
     buttons = kb.inline_keyboard
-    assert len(buttons) >= 5
+    assert len(buttons) >= 6
     texts = [btn.text for row in buttons for btn in row]
-    assert any("Купить ключ" in t for t in texts)
+    assert any("Купить тариф" in t for t in texts)
+    assert any("Получить пробный ключ" in t for t in texts)
     assert any("Моя подписка" in t for t in texts)
     assert any("Реферальная" in t for t in texts)
     assert any("Починить доступ" in t for t in texts)
@@ -191,6 +192,19 @@ def test_render_bot_notification_referral_reward_custom_days():
     result = render_bot_notification("referral_reward", {"reward_days": 14})
     assert result is not None
     assert "+14 дней" in result
+
+
+def test_render_bot_notification_referral_paid_bonus_default_days():
+    result = render_bot_notification("referral_paid_bonus", {})
+    assert result is not None
+    assert "+2 дней" in result
+    assert "реферальный бонус" in result
+
+
+def test_render_bot_notification_referral_paid_bonus_custom_days():
+    result = render_bot_notification("referral_paid_bonus", {"reward_days": 5})
+    assert result is not None
+    assert "+5 дней" in result
 
 
 def test_render_bot_notification_payment_failed():
@@ -264,9 +278,11 @@ async def test_send_expiry_notifications_with_users():
     future_ts = int((datetime.now(timezone.utc).timestamp() + 172800) * 1000)
     with patch("main.backend_expiring", new_callable=AsyncMock) as mock_expiring, \
          patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
-         patch("main.referral_link", new_callable=AsyncMock) as mock_ref:
+         patch("main.referral_link", new_callable=AsyncMock) as mock_ref, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_expiring.return_value = [{"telegram_id": 123, "expires_at": future_ts}]
         mock_ref.return_value = "https://t.me/TestBot?start=abc"
+        mock_menu.return_value = MagicMock()
         sent = await send_expiry_notifications()
         assert sent == 1
         mock_send.assert_called_once()
@@ -277,9 +293,11 @@ async def test_send_expiry_notifications_last_day():
     future_ts = int((datetime.now(timezone.utc).timestamp() + 3600) * 1000)
     with patch("main.backend_expiring", new_callable=AsyncMock) as mock_expiring, \
          patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
-         patch("main.referral_link", new_callable=AsyncMock) as mock_ref:
+         patch("main.referral_link", new_callable=AsyncMock) as mock_ref, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_expiring.return_value = [{"telegram_id": 123, "expires_at": future_ts}]
         mock_ref.return_value = None
+        mock_menu.return_value = MagicMock()
         sent = await send_expiry_notifications()
         assert sent == 1
         call_args = mock_send.call_args
@@ -311,14 +329,16 @@ async def test_send_expired_notifications_with_users():
     past_ts = int((datetime.now(timezone.utc).timestamp() - 3600) * 1000)
     with patch("main.backend_expired", new_callable=AsyncMock) as mock_expired, \
          patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
-         patch("main.referral_link", new_callable=AsyncMock) as mock_ref:
+         patch("main.referral_link", new_callable=AsyncMock) as mock_ref, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_expired.return_value = [{"telegram_id": 123, "expires_at": past_ts}]
         mock_ref.return_value = None
+        mock_menu.return_value = MagicMock()
         sent = await send_expired_notifications()
         assert sent == 1
         call_args = mock_send.call_args
         text = call_args[0][1]
-        assert "Доступ перекрыт" in text
+        assert "подписка истекла" in text.lower()
 
 
 @pytest.mark.asyncio
@@ -345,9 +365,11 @@ async def test_send_renewal_notifications_with_users():
     future_ts = int((datetime.now(timezone.utc).timestamp() + 86400) * 1000)
     with patch("main.backend_renewed", new_callable=AsyncMock) as mock_renewed, \
          patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
-         patch("main.referral_link", new_callable=AsyncMock) as mock_ref:
+         patch("main.referral_link", new_callable=AsyncMock) as mock_ref, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_renewed.return_value = [{"telegram_id": 123, "expires_at": future_ts}]
         mock_ref.return_value = None
+        mock_menu.return_value = MagicMock()
         sent = await send_renewal_notifications()
         assert sent == 1
         call_args = mock_send.call_args
@@ -376,10 +398,12 @@ async def test_send_bot_notifications_no_notifications():
 @pytest.mark.asyncio
 async def test_send_bot_notifications_referral_signup():
     with patch("main.backend_notifications", new_callable=AsyncMock) as mock_notifs, \
-         patch("main.bot.send_message", new_callable=AsyncMock) as mock_send:
+         patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_notifs.return_value = [
             {"telegram_id": 123, "kind": "referral_signup", "data": {"friend_name": "Alice"}}
         ]
+        mock_menu.return_value = MagicMock()
         sent = await send_bot_notifications()
         assert sent == 1
         call_args = mock_send.call_args
@@ -390,10 +414,12 @@ async def test_send_bot_notifications_referral_signup():
 @pytest.mark.asyncio
 async def test_send_bot_notifications_referral_reward():
     with patch("main.backend_notifications", new_callable=AsyncMock) as mock_notifs, \
-         patch("main.bot.send_message", new_callable=AsyncMock) as mock_send:
+         patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_notifs.return_value = [
             {"telegram_id": 123, "kind": "referral_reward", "data": {"reward_days": 7}}
         ]
+        mock_menu.return_value = MagicMock()
         sent = await send_bot_notifications()
         assert sent == 1
         call_args = mock_send.call_args
@@ -404,10 +430,12 @@ async def test_send_bot_notifications_referral_reward():
 @pytest.mark.asyncio
 async def test_send_bot_notifications_payment_failed():
     with patch("main.backend_notifications", new_callable=AsyncMock) as mock_notifs, \
-         patch("main.bot.send_message", new_callable=AsyncMock) as mock_send:
+         patch("main.bot.send_message", new_callable=AsyncMock) as mock_send, \
+         patch("main.get_user_menu_keyboard", new_callable=AsyncMock) as mock_menu:
         mock_notifs.return_value = [
             {"telegram_id": 123, "kind": "payment_failed", "data": {}}
         ]
+        mock_menu.return_value = MagicMock()
         sent = await send_bot_notifications()
         assert sent == 1
         call_args = mock_send.call_args
