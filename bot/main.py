@@ -3,6 +3,7 @@ import asyncio
 import logging
 import json
 import signal
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 
@@ -31,12 +32,21 @@ BOT_API_SECRET = os.getenv("BOT_API_SECRET", "")
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://thenomoreblocks.com")
 NOTIFY_INTERVAL = int(os.getenv("NOTIFY_INTERVAL", "3600"))
 MONITORING_CHAT_ID = os.getenv("MONITORING_CHAT_ID", "")
+ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()}
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 http_client: httpx.AsyncClient | None = None
+_shutdown = False
+notification_task: asyncio.Task | None = None
 # Pending referrer codes captured from /start REFCODE, applied on first key purchase.
 pending_refs: dict[int, str] = {}
+_referral_link_cache: dict[int, tuple[str, float]] = {}
+_LINK_CACHE_TTL = 300
+
+
+def clear_referral_link_cache() -> None:
+    _referral_link_cache.clear()
 
 
 def api_headers() -> dict:
@@ -112,20 +122,30 @@ async def backend_claim_login_token(token: str, telegram_id: int) -> bool:
 
 
 async def backend_referral(telegram_id: int) -> dict | None:
-    resp = await http_client.post(
-        f"{BACKEND_URL}/api/bot/referral",
-        headers=api_headers(),
-        json={"telegram_id": telegram_id},
-        timeout=30,
-    )
-    if resp.status_code == 404:
+    try:
+        resp = await http_client.post(
+            f"{BACKEND_URL}/api/bot/referral",
+            headers=api_headers(),
+            json={"telegram_id": telegram_id},
+            timeout=30,
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        logger.error("backend_referral failed: %s", e.response.status_code)
         return None
-    resp.raise_for_status()
-    return resp.json()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("backend_referral error: %s", e)
+        return None
 
 
 async def referral_link(telegram_id: int) -> str | None:
     """Return this user's referral deep link, or None if unavailable."""
+    cached = _referral_link_cache.get(telegram_id)
+    if cached and time.monotonic() - cached[1] < _LINK_CACHE_TTL:
+        return cached[0]
     try:
         data = await backend_referral(telegram_id)
     except Exception:  # noqa: BLE001
@@ -136,7 +156,9 @@ async def referral_link(telegram_id: int) -> str | None:
         me = await bot.get_me()
     except Exception:  # noqa: BLE001
         return None
-    return f"https://t.me/{me.username}?start={data['referral_code']}"
+    link = f"https://t.me/{me.username}?start={data['referral_code']}"
+    _referral_link_cache[telegram_id] = (link, time.monotonic())
+    return link
 
 
 def referral_anchor(link: str | None) -> str:
@@ -150,57 +172,92 @@ def referral_anchor(link: str | None) -> str:
 
 
 async def backend_get_user(telegram_id: int) -> dict | None:
-    resp = await http_client.get(
-        f"{BACKEND_URL}/api/bot/user/{telegram_id}",
-        headers=api_headers(),
-        timeout=30,
-    )
-    if resp.status_code == 404:
+    try:
+        resp = await http_client.get(
+            f"{BACKEND_URL}/api/bot/user/{telegram_id}",
+            headers=api_headers(),
+            timeout=30,
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        logger.error("backend_get_user failed: %s", e.response.status_code)
         return None
-    resp.raise_for_status()
-    return resp.json()
+    except Exception as e:  # noqa: BLE001
+        logger.exception("backend_get_user error: %s", e)
+        return None
 
 
 async def backend_expiring(hours: int = 72) -> list[dict]:
-    resp = await http_client.get(
-        f"{BACKEND_URL}/api/bot/notifications/expiring",
-        headers=api_headers(),
-        params={"hours": hours},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json().get("users", [])
+    try:
+        resp = await http_client.get(
+            f"{BACKEND_URL}/api/bot/notifications/expiring",
+            headers=api_headers(),
+            params={"hours": hours},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("users", [])
+    except httpx.HTTPStatusError as e:
+        logger.error("backend_expiring failed: %s", e.response.status_code)
+        return []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("backend_expiring error: %s", e)
+        return []
 
 
 async def backend_expired(hours: int = 24) -> list[dict]:
-    resp = await http_client.get(
-        f"{BACKEND_URL}/api/bot/notifications/expired",
-        headers=api_headers(),
-        params={"hours": hours},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json().get("users", [])
+    try:
+        resp = await http_client.get(
+            f"{BACKEND_URL}/api/bot/notifications/expired",
+            headers=api_headers(),
+            params={"hours": hours},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("users", [])
+    except httpx.HTTPStatusError as e:
+        logger.error("backend_expired failed: %s", e.response.status_code)
+        return []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("backend_expired error: %s", e)
+        return []
 
 
 async def backend_renewed() -> list[dict]:
-    resp = await http_client.get(
-        f"{BACKEND_URL}/api/bot/notifications/renewed",
-        headers=api_headers(),
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json().get("users", [])
+    try:
+        resp = await http_client.get(
+            f"{BACKEND_URL}/api/bot/notifications/renewed",
+            headers=api_headers(),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("users", [])
+    except httpx.HTTPStatusError as e:
+        logger.error("backend_renewed failed: %s", e.response.status_code)
+        return []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("backend_renewed error: %s", e)
+        return []
 
 
 async def backend_notifications() -> list[dict]:
-    resp = await http_client.get(
-        f"{BACKEND_URL}/api/bot/notifications/pending",
-        headers=api_headers(),
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return resp.json().get("notifications", [])
+    try:
+        resp = await http_client.get(
+            f"{BACKEND_URL}/api/bot/notifications/pending",
+            headers=api_headers(),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json().get("notifications", [])
+    except httpx.HTTPStatusError as e:
+        logger.error("backend_notifications failed: %s", e.response.status_code)
+        return []
+    except Exception as e:  # noqa: BLE001
+        logger.exception("backend_notifications error: %s", e)
+        return []
 
 
 def main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -240,19 +297,20 @@ def fix_os_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-async def send_hosts_script(message: types.Message | None, path: str, caption: str) -> None:
+async def send_hosts_script(message: types.Message | None, path: str, caption: str) -> bool:
     try:
         with open(path, "rb") as f:
             data = f.read()
     except Exception:
         if message is not None:
             await message.answer("❌ Файл не найден. Свяжитесь с поддержкой.")
-        return
+        return False
     if message is not None:
         await message.answer_document(
             types.BufferedInputFile(data, filename=os.path.basename(path)),
             caption=caption,
         )
+    return True
 
 
 def format_expiry(data: dict) -> str | None:
@@ -262,7 +320,7 @@ def format_expiry(data: dict) -> str | None:
     now = datetime.now(timezone.utc)
     dt = datetime.fromtimestamp(exp / 1000, tz=timezone.utc)
     days = (dt - now).total_seconds() / 86400
-    if days > 1:
+    if days >= 1:
         return f"⏳ Подписка активна до <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b> (осталось ~{days:.0f} дн.)"
     if days > 0:
         return f"⏳ Подписка активна до <b>{dt.strftime('%d.%m.%Y %H:%M UTC')}</b> (осталось менее суток)"
@@ -284,7 +342,8 @@ def format_config_message(data: dict) -> str:
     exp = format_expiry(data)
     if exp:
         lines.append(exp + "\n")
-    lines.append("📦 Sing-box конфиг пришлю отдельным файлом ниже.")
+    if data.get("singbox"):
+        lines.append("📦 Sing-box конфиг пришлю отдельным файлом ниже.")
     return "\n".join(lines)
 
 
@@ -354,16 +413,17 @@ async def cmd_start(message: types.Message) -> None:
                 )
             return
 
-        # A 32-char token is a browser login deep link; claim it for this user.
-        if len(param) >= 16 and await backend_claim_login_token(param, message.from_user.id):
-            await message.answer(
-                "✅ <b>Вход подтверждён!</b>\n\n"
-                "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
-                reply_markup=main_menu_keyboard(),
-            )
-            return
-        # Otherwise treat the parameter as a referral code (captured on /buy).
-        pending_refs[message.from_user.id] = param
+        # A 32-char hex token is a browser login deep link; claim it for this user.
+        if len(param) == 32 and all(c in "0123456789abcdef" for c in param.lower()):
+            if await backend_claim_login_token(param, message.from_user.id):
+                await message.answer(
+                    "✅ <b>Вход подтверждён!</b>\n\n"
+                    "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
+                    reply_markup=main_menu_keyboard(),
+                )
+                return
+        else:
+            pending_refs[message.from_user.id] = param
     await message.answer(
         "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
         "Я выдаю и доставляю ваши VPN-ключи прямо сюда в Telegram.\n"
@@ -394,7 +454,7 @@ async def cmd_referral(message: types.Message) -> None:
 
 @dp.message(Command("id"))
 async def cmd_id(message: types.Message) -> None:
-    await message.answer(f"Your Telegram ID: <code>{message.from_user.id}</code>")
+    await message.answer(f"Ваш Telegram ID: <code>{message.from_user.id}</code>")
 
 
 @dp.message(Command("status"))
@@ -424,6 +484,9 @@ async def cmd_buy(message: types.Message) -> None:
 
 @dp.message(Command("notify"))
 async def cmd_notify(message: types.Message) -> None:
+    if not ADMIN_IDS or message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ Эта команда доступна только администратору.")
+        return
     await send_expiry_notifications()
     await message.answer("✅ Проверка истекающих подписок выполнена.")
 
@@ -531,8 +594,8 @@ async def callbacks(callback: types.CallbackQuery):
             "4. Дождись надписи «ГОТОВО!».\n\n"
             "Если не помогло — отключи VPN/прокси и перезагрузи компьютер."
         )
-        await send_hosts_script(callback.message, FIX_WINDOWS_PATH, caption)
-        if callback.message is not None:
+        ok = await send_hosts_script(callback.message, FIX_WINDOWS_PATH, caption)
+        if ok and callback.message is not None:
             await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
         return
     if callback.data == "fix_macos":
@@ -545,8 +608,8 @@ async def callbacks(callback: types.CallbackQuery):
             "5. Введи пароль администратора.\n\n"
             "Если не помогло — отключи VPN/прокси и перезагрузи компьютер."
         )
-        await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
-        if callback.message is not None:
+        ok = await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
+        if ok and callback.message is not None:
             await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
         return
     if callback.data == "fix_linux":
@@ -559,8 +622,8 @@ async def callbacks(callback: types.CallbackQuery):
             "5. Введи пароль администратора.\n\n"
             "Если не помогло — перезагрузи систему."
         )
-        await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
-        if callback.message is not None:
+        ok = await send_hosts_script(callback.message, FIX_MACOS_LINUX_PATH, caption)
+        if ok and callback.message is not None:
             await callback.message.answer("✅ Готово!", reply_markup=main_menu_keyboard())
         return
     if callback.data == "instructions":
@@ -696,12 +759,12 @@ def render_bot_notification(kind: str, data: dict) -> str | None:
         name = (data.get("friend_name") or "").strip()
         who = f" <b>{name}</b>" if name else ""
         return (
-            "🤝 <b>По вашей реферальной ссылке зарегистрировался друг{who}!</b>\n\n"
+            "🤝 По вашей реферальной ссылке зарегистрировался друг{who}!\n\n"
             "Когда он купит платный тариф, вы получите <b>+7 дней</b> к подписке бесплатно. "
             "Делитесь ссылкой дальше и приглашайте ещё больше друзей!"
         ).format(who=who)
     if kind == "referral_reward":
-        days = data.get("reward_days") or 7
+        days = data.get("reward_days", 7)
         return (
             f"🎁 <b>Вам начислено +{days} дней!</b>\n\n"
             "Друг купил тариф по вашей ссылке — бонус зачислен, ваша подписка продлена. "
@@ -763,12 +826,14 @@ async def notification_loop() -> None:
 
 
 async def main() -> None:
-    global http_client
+    global http_client, _shutdown, notification_task
     http_client = httpx.AsyncClient()
     loop = asyncio.get_running_loop()
 
     def _signal_handler() -> None:
-        logger.info("Shutdown signal received")
+        global _shutdown
+        _shutdown = True
+        loop.call_soon_threadsafe(lambda: asyncio.create_task(dp.stop_polling()))
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
@@ -777,7 +842,7 @@ async def main() -> None:
             pass
 
     try:
-        asyncio.create_task(notification_loop())
+        notification_task = asyncio.create_task(notification_loop())
         await dp.start_polling(bot)
     except TelegramConflictError:
         logger.error("TelegramConflictError: another instance is already polling. Stopping.")
@@ -785,9 +850,25 @@ async def main() -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Bot stopped")
     finally:
-        await send_monitoring_alert("⛔ Bot stopped")
-        await http_client.aclose()
-        await bot.session.close()
+        _shutdown = True
+        if notification_task is not None:
+            notification_task.cancel()
+            try:
+                await notification_task
+            except asyncio.CancelledError:
+                pass
+        try:
+            await send_monitoring_alert("⛔ Bot stopped")
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            await http_client.aclose()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            await bot.session.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 if __name__ == "__main__":

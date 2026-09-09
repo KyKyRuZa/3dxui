@@ -28,8 +28,14 @@ from main import (
     backend_claim_login_token,
     backend_generate_bind_code,
     backend_generate_login_code,
+    clear_referral_link_cache,
     notification_loop,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_referral_link_cache():
+    clear_referral_link_cache()
 
 
 def test_format_expiry_active():

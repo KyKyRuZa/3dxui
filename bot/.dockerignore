@@ -1,0 +1,12 @@
+.env
+.env.*
+*.pem
+__pycache__
+.git
+.gitignore
+.dockerignore
+Dockerfile
+*.md
+test_bot.py
+add_hosts_linux_macos.sh
+add_hosts_windows.bat
