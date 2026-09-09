@@ -128,7 +128,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	// Renew a subscription that has no expiry yet or has already expired
 	// (e.g. user pressed "Купить ключ" again). This also binds the new
 	// time-limited model to previously unlimited (grandfathered) subscriptions.
-	if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(time.Now()) {
+	if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(utils.NowMSK()) {
 		if err := h.renewSubscription(ctx, sub); err != nil {
 			h.log.Errorw("botEnsureUser: renew error", "userID", maskInt(user.ID), "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to renew subscription"})
@@ -160,6 +160,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 								fmt.Sprintf("signup:%d:%d", referrer.ID, user.ID), payload)
 						}
 					}
+					h.applyReferralSignupBonus(ctx, sub)
 				}
 			}
 		}

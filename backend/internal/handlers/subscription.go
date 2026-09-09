@@ -196,7 +196,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 			}
 		}
 		// Renew a subscription that has no expiry yet or has already expired.
-		if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(time.Now()) {
+		if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(utils.NowMSK()) {
 			if rerr := h.renewSubscription(ctx, sub); rerr != nil {
 				h.log.Errorw("activate: renew error", "userID", maskInt(userID), "error", rerr)
 			}
