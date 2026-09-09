@@ -444,38 +444,66 @@ async def deliver_key(message: types.Message, telegram_id: int, first_name: str 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message) -> None:
     parts = message.text.split(maxsplit=1)
-    if len(parts) > 1 and parts[1].strip():
-        param = parts[1].strip()
+    param = parts[1].strip() if len(parts) > 1 else ""
+    referred_code = param or ""
 
-        # Handle bind code: /start bind-XXXXXXXX
-        if param.startswith("bind-") and len(param) > 5:
-            code = param[5:].strip()
-            if await backend_generate_bind_code(message.from_user.id, code):
-                await message.answer(
-                    "✅ <b>Telegram привязан к аккаунту!</b>\n\n"
-                    "Теперь вы можете входить на сайт через код из бота.\n"
-                    "Используйте /link для получения кода входа.",
-                    reply_markup=await get_user_menu_keyboard(message.from_user.id),
-                )
-            else:
-                await message.answer(
-                    "❌ <b>Не удалось привязать Telegram.</b>\n\n"
-                    "Код недействителен или истёк. Получите новый код на сайте.",
-                    reply_markup=await get_user_menu_keyboard(message.from_user.id),
-                )
+    if message.web_app_data and message.web_app_data.data:
+        try:
+            import json as _json
+            payload = _json.loads(message.web_app_data.data)
+            if isinstance(payload, dict):
+                referred_code = referred_code or payload.get("referral_code") or payload.get("ref") or ""
+        except Exception:
+            pass
+
+    if referred_code:
+        pending_refs[message.from_user.id] = referred_code
+
+    if referred_code:
+        try:
+            await backend_ensure_user(message.from_user.id, message.from_user.first_name, referred_code)
+        except Exception as e:  # noqa: BLE001
+            logger.debug("cmd_start: ensure user failed: %s", e)
+
+    if not param and not message.web_app_data:
+        code = await backend_generate_login_code(message.from_user.id)
+        if code:
+            await message.answer(
+                "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
+                "Получите готовый VPN-конфиг за минуту — обходите блокировки, сохраняйте приватность и возвращайте доступ к нужным сайтам.\n\n"
+                f"🔐 <b>Ваш код для входа на сайт:</b> <code>{code}</code>\n\n"
+                "Введите его в разделе «Войти через Telegram». Код действителен 5 минут.\n\n"
+                "🛒 <b>Хотите полный доступ без ограничений?</b> Нажмите <b>Купить тариф</b> — подписка активируется автоматически после оплаты.\n"
+                "🔑 Или начните с <b>пробного ключа</b> — он выдаётся бесплатно на 2 дня.",
+                reply_markup=await get_user_menu_keyboard(message.from_user.id),
+            )
             return
 
-        # A 32-char hex token is a browser login deep link; claim it for this user.
-        if len(param) == 32 and all(c in "0123456789abcdef" for c in param.lower()):
-            if await backend_claim_login_token(param, message.from_user.id):
-                await message.answer(
-                    "✅ <b>Вход подтверждён!</b>\n\n"
-                    "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
-                    reply_markup=await get_user_menu_keyboard(message.from_user.id),
-                )
-                return
+    if param.startswith("bind-") and len(param) > 5:
+        code = param[5:].strip()
+        if await backend_generate_bind_code(message.from_user.id, code):
+            await message.answer(
+                "✅ <b>Telegram привязан к аккаунту!</b>\n\n"
+                "Теперь вы можете входить на сайт через код из бота.\n"
+                "Используйте /link для получения кода входа.",
+                reply_markup=await get_user_menu_keyboard(message.from_user.id),
+            )
         else:
-            pending_refs[message.from_user.id] = param
+            await message.answer(
+                "❌ <b>Не удалось привязать Telegram.</b>\n\n"
+                "Код недействителен или истёк. Получите новый код на сайте.",
+                reply_markup=await get_user_menu_keyboard(message.from_user.id),
+            )
+        return
+
+    if len(param) == 32 and all(c in "0123456789abcdef" for c in param.lower()):
+        if await backend_claim_login_token(param, message.from_user.id):
+            await message.answer(
+                "✅ <b>Вход подтверждён!</b>\n\n"
+                "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
+                reply_markup=await get_user_menu_keyboard(message.from_user.id),
+            )
+            return
     await message.answer(
         "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
         "Получите готовый VPN-конфиг за минуту — обходите блокировки, сохраняйте приватность и возвращайте доступ к нужным сайтам.\n\n"
