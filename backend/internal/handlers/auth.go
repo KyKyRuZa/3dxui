@@ -82,7 +82,7 @@ func (h *Handler) issueSession(c *gin.Context, user *models.User) {
 		RefreshHash: hash,
 		UserAgent:   c.Request.UserAgent(),
 		IP:          c.ClientIP(),
-		ExpiresAt:   time.Now().Add(auth.RefreshTTL()),
+		ExpiresAt:   utils.NowMSK().Add(auth.RefreshTTL()),
 	}
 	if err := h.store.CreateSession(c.Request.Context(), sess); err != nil {
 		h.log.Errorw("issueSession: CreateSession error", "error", err, "userID", maskInt(user.ID))
@@ -302,7 +302,7 @@ func (h *Handler) telegramWidget(c *gin.Context) {
 // website then polls telegramLinkCheck to complete the login.
 func (h *Handler) telegramLink(c *gin.Context) {
 	token := utils.RandString(32)
-	expires := time.Now().Add(5 * time.Minute)
+	expires := utils.NowMSK().Add(5 * time.Minute)
 	if err := h.store.CreateLoginToken(c.Request.Context(), token, expires); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return

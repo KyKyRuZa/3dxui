@@ -459,12 +459,6 @@ async def cmd_start(message: types.Message) -> None:
     if referred_code:
         pending_refs[message.from_user.id] = referred_code
 
-    if referred_code:
-        try:
-            await backend_ensure_user(message.from_user.id, message.from_user.first_name, referred_code)
-        except Exception as e:  # noqa: BLE001
-            logger.debug("cmd_start: ensure user failed: %s", e)
-
     if not param and not message.web_app_data:
         code = await backend_generate_login_code(message.from_user.id)
         if code:

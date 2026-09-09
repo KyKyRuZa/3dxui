@@ -12,6 +12,7 @@ import (
 
 	"github.com/ilyas/vpn-service/backend/internal/models"
 	"github.com/ilyas/vpn-service/backend/internal/panel"
+	"github.com/ilyas/vpn-service/backend/internal/utils"
 )
 
 func extractHost(raw string) string {
@@ -239,7 +240,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 
 	var addClientInfo *panel.ClientInfo
-	expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
+	expiryMs := utils.NowMSK().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
 	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
 		h.log.Debugw("activate: creating client in panel", "email", maskStr(panelEmail), "error", err)

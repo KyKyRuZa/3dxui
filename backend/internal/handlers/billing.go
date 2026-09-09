@@ -18,6 +18,7 @@ import (
 	"github.com/ilyas/vpn-service/backend/internal/models"
 	"github.com/ilyas/vpn-service/backend/internal/panel"
 	"github.com/ilyas/vpn-service/backend/internal/store"
+	"github.com/ilyas/vpn-service/backend/internal/utils"
 )
 
 func isPrivateIP(ip net.IP) bool {
@@ -302,7 +303,7 @@ func (h *Handler) provisionPlan(ctx context.Context, userID int64, plan *models.
 
 	sub, err := h.store.GetUserSubscription(ctx, userID)
 	if errors.Is(err, store.ErrNotFound) {
-		expiryMs := time.Now().AddDate(0, 0, days).UnixMilli()
+		expiryMs := utils.NowMSK().AddDate(0, 0, days).UnixMilli()
 		var clientInfo *panel.ClientInfo
 		if _, gerr := h.panel.GetClient(ctx, panelEmail); gerr != nil {
 			addClientInfo, aerr := h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
@@ -352,7 +353,7 @@ func (h *Handler) provisionPlan(ctx context.Context, userID int64, plan *models.
 			_ = h.store.UpdateSubscriptionSubID(ctx, sub.ID, subID)
 		}
 	}
-	base := time.Now()
+	base := utils.NowMSK()
 	if sub.ExpiresAt.Valid && sub.ExpiresAt.Time.After(base) {
 		base = sub.ExpiresAt.Time
 	}

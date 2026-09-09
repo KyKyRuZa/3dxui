@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/ilyas/vpn-service/backend/internal/models"
+	"github.com/ilyas/vpn-service/backend/internal/utils"
 )
 
 const adminCookieName = "admin_session"
@@ -37,7 +38,7 @@ func (h *Handler) adminLogin(c *gin.Context) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Expires:  time.Now().Add(24 * time.Hour),
+		Expires:  utils.NowMSK().Add(24 * time.Hour),
 	}
 	http.SetCookie(c.Writer, cookie)
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})

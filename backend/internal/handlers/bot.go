@@ -64,7 +64,7 @@ func (h *Handler) botEnsureUser(c *gin.Context) {
 	sub, err := h.store.GetUserSubscription(ctx, user.ID)
 	if err == store.ErrNotFound {
 		panelEmail := user.Username
-		expiryMs := time.Now().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
+		expiryMs := utils.NowMSK().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
 		var addClientInfo *panel.ClientInfo
 		if _, getErr := h.panel.GetClient(ctx, panelEmail); getErr != nil {
@@ -224,7 +224,7 @@ func (h *Handler) applyReferralSignupBonus(ctx context.Context, sub *models.Subs
 		return
 	}
 	days := h.cfg.ReferralSignupBonusDays
-	newExpiry := time.Now().AddDate(0, 0, days)
+	newExpiry := utils.NowMSK().AddDate(0, 0, days)
 	if sub.ExpiresAt.Valid {
 		newExpiry = sub.ExpiresAt.Time.AddDate(0, 0, days)
 	}
@@ -254,8 +254,7 @@ func (h *Handler) renewSubscription(ctx context.Context, sub *models.Subscriptio
 			_ = h.store.UpdateSubscriptionSubID(ctx, sub.ID, subID)
 		}
 	}
-	// Extend from current expiry if still valid, otherwise from now.
-	base := time.Now()
+	base := utils.NowMSK()
 	if sub.ExpiresAt.Valid && sub.ExpiresAt.Time.After(base) {
 		base = sub.ExpiresAt.Time
 	}
@@ -291,7 +290,7 @@ func (h *Handler) CreditReferralReward(ctx context.Context, referredUserID int64
 		return
 	}
 	referrerDays := h.cfg.ReferralRewardDays
-	referrerNewExpiry := time.Now().AddDate(0, 0, referrerDays)
+	referrerNewExpiry := utils.NowMSK().AddDate(0, 0, referrerDays)
 	if referrerSub.ExpiresAt.Valid {
 		referrerNewExpiry = referrerSub.ExpiresAt.Time.AddDate(0, 0, referrerDays)
 	}
@@ -316,7 +315,7 @@ func (h *Handler) CreditReferralReward(ctx context.Context, referredUserID int64
 	if err != nil {
 		h.log.Debugw("CreditReferralReward: referred has no subscription", "referred", maskInt(referredUserID), "error", err)
 	} else if referredDays > 0 {
-		referredNewExpiry := time.Now().AddDate(0, 0, referredDays)
+		referredNewExpiry := utils.NowMSK().AddDate(0, 0, referredDays)
 		if referredSub.ExpiresAt.Valid {
 			referredNewExpiry = referredSub.ExpiresAt.Time.AddDate(0, 0, referredDays)
 		}
@@ -464,7 +463,7 @@ func (h *Handler) botGetUser(c *gin.Context) {
 
 func (h *Handler) botExpiring(c *gin.Context) {
 	ctx := c.Request.Context()
-	before := time.Now().AddDate(0, 0, h.cfg.ExpiryNotifyDays)
+	before := utils.NowMSK().AddDate(0, 0, h.cfg.ExpiryNotifyDays)
 	items, err := h.store.GetExpiringSubscriptions(ctx, before)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
@@ -503,7 +502,7 @@ func (h *Handler) botExpired(c *gin.Context) {
 			hours = parsed
 		}
 	}
-	since := time.Now().Add(-time.Duration(hours) * time.Hour)
+	since := utils.NowMSK().Add(-time.Duration(hours) * time.Hour)
 	items, err := h.store.GetExpiredSubscriptions(ctx, since)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})

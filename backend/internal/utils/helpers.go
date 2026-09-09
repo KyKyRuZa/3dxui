@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/rand"
 	"fmt"
+	"time"
 )
 
 func RandString(n int) string {
@@ -35,4 +36,11 @@ func GenIdempotencyKey() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%x", b)
+}
+
+var mskZone = time.FixedZone("MSK", 3*3600)
+
+// NowMSK returns the current time in UTC+3 (MSK).
+func NowMSK() time.Time {
+	return time.Now().In(mskZone)
 }
