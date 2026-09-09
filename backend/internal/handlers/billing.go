@@ -258,6 +258,17 @@ func (h *Handler) billingWebhook(c *gin.Context) {
 		amountMinor = gotMinor
 	}
 	_ = h.store.SetPaymentResult(ctx, payload.Object.ID, "succeeded", amountMinor, verified.Amount.Currency)
+
+	if u, uerr := h.store.GetUserByID(ctx, userID); uerr == nil && u.TelegramID.Valid && u.TelegramID.Int64 != 0 {
+		if payload2, jerr := json.Marshal(map[string]any{
+			"plan_id":      plan.ID,
+			"amount_minor": amountMinor,
+		}); jerr == nil {
+			_ = h.store.CreateBotNotification(ctx, u.TelegramID.Int64, "payment_succeeded",
+				fmt.Sprintf("paysuccess:%s", payload.Object.ID), payload2)
+		}
+	}
+
 	h.CreditReferralReward(ctx, userID)
 
 	c.JSON(http.StatusOK, gin.H{"ok": true})

@@ -156,6 +156,123 @@ func TestBillingWebhook_PaymentSucceeded_Idempotent(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestBillingWebhook_PaymentSucceeded_NotifiesUser(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
+	require.NoError(t, err)
+	st := store.New(db)
+
+	panelSrv := newMockPanelServer(t)
+	defer panelSrv.Close()
+
+	yooSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/payments/pay_success" {
+			resp := map[string]any{
+				"id":     "pay_success",
+				"status": "succeeded",
+				"amount": map[string]any{"value": "299.00", "currency": "RUB"},
+				"metadata": map[string]any{
+					"user_id": "1",
+					"plan_id": "standard",
+				},
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer yooSrv.Close()
+
+	cfg := &config.Config{
+		DefaultSubscriptionDays: 2,
+		ExpiryNotifyDays:        2,
+		ReferralRewardDays:      7,
+		ReferralSignupBonusDays: 2,
+		DefaultGroup:            "Free",
+		DefaultInboundIDs:       []int{1},
+		BotAPISecret:            "bot-secret",
+		PanelURL:                panelSrv.URL,
+		PanelPublicURL:          panelSrv.URL,
+		YookassaShopID:          "1268375",
+		YookassaSecretKey:       "test_secret",
+		YookassaReturnURL:       "https://example.com/return",
+		YookassaAPIURL:          yooSrv.URL,
+		BotUsername:             "AutoColorsBot",
+	}
+
+	log, _ := zap.NewDevelopment()
+	tokenSvc, err := newTestTokenServiceAuth(t)
+	require.NoError(t, err)
+
+	p := panel.New(panelSrv.URL, "admin", "admin", "", log.Sugar())
+	billingClient := billing.New(cfg.YookassaShopID, cfg.YookassaSecretKey, cfg.YookassaAPIURL)
+	h := NewHandler(st, tokenSvc, cfg, p, billingClient, nil, log.Sugar())
+
+	now := time.Now()
+
+	mock.ExpectExec("INSERT INTO payments.*ON CONFLICT.*DO NOTHING").
+		WithArgs("pay_success", int64(1), "standard", int64(29900), "RUB").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectQuery("UPDATE payments SET status").
+		WithArgs("pay_success").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "plan_id"}).AddRow(1, "standard"))
+
+	mock.ExpectQuery("SELECT id, user_id, plan_id, status, amount_minor, currency, created_at, updated_at FROM payments WHERE id = .*").
+		WithArgs("pay_success").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "plan_id", "status", "amount_minor", "currency", "created_at", "updated_at"}).
+			AddRow("pay_success", 1, "standard", "pending", int64(29900), "RUB", now, now))
+
+	mock.ExpectQuery("SELECT id, name, duration_days, price_minor, currency, group_name FROM plans WHERE id = .*").
+		WithArgs("standard").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "duration_days", "price_minor", "currency", "group_name"}).
+			AddRow("standard", "Standard", 30, int64(29900), "RUB", "Free"))
+
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_1", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
+
+	mock.ExpectQuery("SELECT id, user_id, status, panel_email, panel_sub_id, group_name, created_at, expires_at FROM subscriptions WHERE user_id = .*").
+		WithArgs(int64(1)).
+		WillReturnError(sql.ErrNoRows)
+
+	mock.ExpectQuery("INSERT INTO subscriptions").
+		WithArgs(int64(1), "active", "tg_1", sqlmock.AnyArg(), "Free", sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(1, now))
+
+	mock.ExpectExec("INSERT INTO renewal_notifications").
+		WithArgs(int64(1), int64(699469085), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectExec("UPDATE payments SET status = .*, updated_at = NOW.*WHERE id = .*").
+		WithArgs("pay_success", "succeeded", int64(29900), "RUB").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectQuery("SELECT id, username, email, password_hash, is_active, is_admin, telegram_id, panel_username, panel_uuid, referral_code, created_at FROM users WHERE id = .*").
+		WithArgs(int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "username", "email", "password_hash", "is_active", "is_admin", "telegram_id", "panel_username", "panel_uuid", "referral_code", "created_at"}).
+			AddRow(1, "tg_1", nil, "hash", true, false, int64(699469085), nil, nil, "refcode", now))
+
+	mock.ExpectExec("INSERT INTO bot_notifications").
+		WithArgs(int64(699469085), "payment_succeeded", "paysuccess:pay_success", sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mock.ExpectQuery("SELECT id, referrer_id, referred_id, status, reward_days, created_at, completed_at FROM referrals WHERE referred_id = .* AND status = 'pending'").
+		WithArgs(int64(1)).
+		WillReturnError(sql.ErrNoRows)
+
+	payload := `{"event":"payment.succeeded","object":{"id":"pay_success","status":"succeeded"}}`
+	req, _ := http.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader([]byte(payload)))
+	req.Header.Set("Content-Type", "application/json")
+	c, w := ginContext(t, req)
+
+	h.billingWebhook(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestBillingWebhook_PaymentCanceled(t *testing.T) {
 	h, mock, _ := newBillingTestHandler(t)
 

@@ -459,33 +459,28 @@ async def cmd_start(message: types.Message) -> None:
     if referred_code:
         pending_refs[message.from_user.id] = referred_code
 
-    if not param and not message.web_app_data:
-        code = await backend_generate_login_code(message.from_user.id)
-        if code:
-            await message.answer(
-                "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
-                "Получите готовый VPN-конфиг за минуту — обходите блокировки, сохраняйте приватность и возвращайте доступ к нужным сайтам.\n\n"
-                f"🔐 <b>Ваш код для входа на сайт:</b> <code>{code}</code>\n\n"
-                "Введите его в разделе «Войти через Telegram». Код действителен 5 минут.\n\n"
-                "🛒 <b>Хотите полный доступ без ограничений?</b> Нажмите <b>Купить тариф</b> — подписка активируется автоматически после оплаты.\n"
-                "🔑 Или начните с <b>пробного ключа</b> — он выдаётся бесплатно на 2 дня.",
-                reply_markup=await get_user_menu_keyboard(message.from_user.id),
-            )
-            return
+    code = await backend_generate_login_code(message.from_user.id)
+    login_code_block = ""
+    if code:
+        login_code_block = (
+            f"\n🔐 <b>Ваш код для входа на сайт:</b> <code>{code}</code>\n"
+            "Введите его в разделе «Войти через Telegram». Код действителен 5 минут.\n"
+        )
 
     if param.startswith("bind-") and len(param) > 5:
-        code = param[5:].strip()
-        if await backend_generate_bind_code(message.from_user.id, code):
+        bind_code = param[5:].strip()
+        if await backend_generate_bind_code(message.from_user.id, bind_code):
             await message.answer(
                 "✅ <b>Telegram привязан к аккаунту!</b>\n\n"
-                "Теперь вы можете входить на сайт через код из бота.\n"
-                "Используйте /link для получения кода входа.",
+                "Теперь вы можете входить на сайт через код из бота."
+                + login_code_block,
                 reply_markup=await get_user_menu_keyboard(message.from_user.id),
             )
         else:
             await message.answer(
                 "❌ <b>Не удалось привязать Telegram.</b>\n\n"
-                "Код недействителен или истёк. Получите новый код на сайте.",
+                "Код недействителен или истёк. Получите новый код на сайте."
+                + login_code_block,
                 reply_markup=await get_user_menu_keyboard(message.from_user.id),
             )
         return
@@ -494,13 +489,16 @@ async def cmd_start(message: types.Message) -> None:
         if await backend_claim_login_token(param, message.from_user.id):
             await message.answer(
                 "✅ <b>Вход подтверждён!</b>\n\n"
-                "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно.",
+                "Вернитесь на сайт — вы уже авторизованы. Можно закрыть это окно."
+                + login_code_block,
                 reply_markup=await get_user_menu_keyboard(message.from_user.id),
             )
             return
+
     await message.answer(
         "<b>Добро пожаловать в Walyny4 vpn! 🛡️</b>\n\n"
-        "Получите готовый VPN-конфиг за минуту — обходите блокировки, сохраняйте приватность и возвращайте доступ к нужным сайтам.\n\n"
+        "Получите готовый VPN-конфиг за минуту — обходите блокировки, сохраняйте приватность и возвращайте доступ к нужным сайтам.\n"
+        + login_code_block +
         "🛒 <b>Хотите полный доступ без ограничений?</b> Нажмите <b>Купить тариф</b> — подписка активируется автоматически после оплаты.\n"
         "🔑 Или начните с <b>пробного ключа</b> — он выдаётся бесплатно на 2 дня.\n\n"
         "💡 Если на WiFi не открывается сайт — включите мобильный хотспот и получите ключ через мобильную сеть. Сам VPN работает на любом соединении.",
@@ -888,6 +886,12 @@ def render_bot_notification(kind: str, data: dict) -> str | None:
             f"🎁 <b>Вам начислено +{days} дней за реферальный бонус!</b>\n\n"
             "Вы перешли по реферальной ссылке и оплатили тариф — бонус зачислен. "
             "Ваша подписка продлена. Спасибо, что.join нас! 🚀"
+        )
+    if kind == "payment_succeeded":
+        return (
+            "✅ <b>Оплата прошла!</b>\n\n"
+            "Ваш тариф активирован, подписка продлена. "
+            "Нажмите 🔑 Получить ключ VPN, чтобы обновить конфиг, или откройте его в мини-приложении."
         )
     if kind == "payment_failed":
         return (

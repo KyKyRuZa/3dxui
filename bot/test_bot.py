@@ -207,6 +207,13 @@ def test_render_bot_notification_referral_paid_bonus_custom_days():
     assert "+5 дней" in result
 
 
+def test_render_bot_notification_payment_succeeded():
+    result = render_bot_notification("payment_succeeded", {"plan_id": "standard", "amount_minor": 29900})
+    assert result is not None
+    assert "Оплата прошла" in result
+    assert "тариф активирован" in result
+
+
 def test_render_bot_notification_payment_failed():
     result = render_bot_notification("payment_failed", {})
     assert result is not None
