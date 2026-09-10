@@ -459,6 +459,8 @@ async def cmd_start(message: types.Message) -> None:
     if referred_code:
         pending_refs[message.from_user.id] = referred_code
 
+    await backend_ensure_user(message.from_user.id, message.from_user.first_name, referred_code or None)
+
     code = await backend_generate_login_code(message.from_user.id)
     login_code_block = ""
     if code:
