@@ -24,13 +24,14 @@ services:
     build: ./backend
     environment:
       - PORT=8080
-      - BOT_API_SECRET=${BOT_API_SECRET:-dev_bot_secret_changeme}
-      - X3DXUI_URL=${X3DXUI_URL}
-      - X3DXUI_ADMIN_USERNAME=${X3DXUI_ADMIN_USERNAME:-zJafmM5BLB}
-      - X3DXUI_ADMIN_PASSWORD=${X3DXUI_ADMIN_PASSWORD:-H476GiU59wk4luBi}
-      - X3DXUI_INBOUND=${X3DXUI_INBOUND:-vless-reality-xhttp}
-      - PUBLIC_ORIGIN=${PUBLIC_ORIGIN:-https://thenomoreblocks.com}
-      - BOT_TOKEN=${BOT_TOKEN:-7500506542:AAEbwJvm_Y-mteq3cL8zMXWHSJN8yTCx3xw}
+      - BOT_API_SECRET=${BOT_API_SECRET}
+      - PANEL_URL=${PANEL_URL}
+      - PANEL_USERNAME=${PANEL_USERNAME}
+      - PANEL_PASSWORD=${PANEL_PASSWORD}
+      - PANEL_API_TOKEN=${PANEL_API_TOKEN}
+      - DEFAULT_INBOUND_IDS=${DEFAULT_INBOUND_IDS}
+      - PUBLIC_ORIGIN=${PUBLIC_ORIGIN}
+      - BOT_TOKEN=${BOT_TOKEN}
     env_file:
       - .env
     ports:
@@ -70,11 +71,11 @@ services:
   bot:
     build: ./bot
     environment:
-      - BOT_TOKEN=${BOT_TOKEN:-7500506542:AAEbwJvm_Y-mteq3cL8zMXWHSJN8yTCx3xw}
-      - WEB_APP_URL=${WEB_APP_URL:-https://thenomoreblocks.com}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - WEB_APP_URL=${WEB_APP_URL}
       - BACKEND_URL=http://backend:8080
-      - BOT_API_SECRET=${BOT_API_SECRET:-dev_bot_secret_changeme}
-      - NOTIFY_INTERVAL=${NOTIFY_INTERVAL:-3600}
+      - BOT_API_SECRET=${BOT_API_SECRET}
+      - NOTIFY_INTERVAL=${NOTIFY_INTERVAL}
     depends_on:
       backend:
         condition: service_healthy
@@ -86,14 +87,14 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${DB_USER:-vpn_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-secure_password}
-      POSTGRES_DB: ${DB_NAME:-vpn_db}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-vpn_user} -d ${DB_NAME:-vpn_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
