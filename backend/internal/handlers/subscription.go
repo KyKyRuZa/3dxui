@@ -242,7 +242,9 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	var addClientInfo *panel.ClientInfo
 	expiryMs := utils.NowMSK().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
-	if _, err := h.panel.GetClient(ctx, panelEmail); err != nil {
+	// Проверяем, существует ли клиент
+	existingClient, err := h.panel.GetClient(ctx, panelEmail)
+	if err != nil {
 		h.log.Debugw("activate: creating client in panel", "email", maskStr(panelEmail), "error", err)
 		addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
 		if err != nil {
@@ -250,10 +252,18 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client in panel"})
 			return
 		}
-		if addClientInfo != nil && addClientInfo.SubID != "" {
-			h.log.Infow("activate: AddClient ok", "email", maskStr(panelEmail), "subId", addClientInfo.SubID)
-		} else {
-			h.log.Infow("activate: AddClient ok", "email", maskStr(panelEmail))
+	} else {
+		// Клиент существует, обновляем ему срок и субсидию
+		h.log.Debugw("activate: updating existing client in panel", "email", maskStr(panelEmail))
+		subID := existingClient.SubID
+		if subID == "" {
+			subID = panel.RandomSubID() // Генерируем новый, если пустой
+		}
+		err = h.panel.UpdateClient(ctx, panelEmail, subID, expiryMs, h.cfg.DefaultInboundIDs)
+		if err != nil {
+			h.log.Errorw("activate: UpdateClient error", "email", maskStr(panelEmail), "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update client in panel"})
+			return
 		}
 	}
 

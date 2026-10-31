@@ -97,13 +97,22 @@ func (c *Client) Login(ctx context.Context) error {
 	}
 	return nil
 }
+func RandomSubID() string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	for i := range b {
+		b[i] = letters[int(b[i])%len(letters)]
+	}
+	return string(b)
+}
 
 func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, expiryTime int64, inboundIDs []int) (*ClientInfo, error) {
 	if err := c.ensureLoggedIn(ctx); err != nil {
 		return nil, err
 	}
 	u := fmt.Sprintf("%s/panel/api/clients/add", c.baseURL)
-	subID := randomSubID()
+	subID := RandomSubID()
 	payload := map[string]interface{}{
 		"client": map[string]interface{}{
 			"email":      email,
@@ -147,16 +156,6 @@ func (c *Client) AddClient(ctx context.Context, email string, totalGB int64, exp
 		SubID:      subID,
 		InboundIDs: inboundIDs,
 	}, nil
-}
-
-func randomSubID() string {
-	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	for i := range b {
-		b[i] = letters[int(b[i])%len(letters)]
-	}
-	return string(b)
 }
 
 type ClientInfo struct {
