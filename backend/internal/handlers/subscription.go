@@ -85,7 +85,7 @@ func (h *Handler) getSubscription(c *gin.Context) {
 	if publicURL == "" {
 		publicURL = h.cfg.PanelURL
 	}
-	subURL := fmt.Sprintf("%s/sub/%s", strings.TrimRight(publicURL, "/"), sub.PanelSubID.String)
+	subURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.cfg.PanelSubURL, "/"), sub.PanelSubID.String)
 
 	c.JSON(http.StatusOK, gin.H{
 		"subscription_url": subURL,
@@ -144,7 +144,7 @@ func (h *Handler) getSingBoxConfig(c *gin.Context) {
 	if publicURL == "" {
 		publicURL = h.cfg.PanelURL
 	}
-	subURL := fmt.Sprintf("%s/sub/%s", strings.TrimRight(publicURL, "/"), sub.PanelSubID.String)
+	subURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.cfg.PanelSubURL, "/"), sub.PanelSubID.String)
 
 	resp, err := http.Get(subURL)
 	if err != nil {
@@ -207,8 +207,8 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		if publicURL == "" {
 			publicURL = h.cfg.PanelURL
 		}
-		subURL := fmt.Sprintf("%s/sub/%s", strings.TrimRight(publicURL, "/"), sub.PanelSubID.String)
-
+		subURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.cfg.PanelSubURL, "/"), clientInfo.SubID)
+		
 		var vlessLink string
 		for _, link := range links {
 			if strings.HasPrefix(link, "vless://") {

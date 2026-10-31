@@ -33,13 +33,14 @@ type Config struct {
 	ExpiryNotifyDays        int
 	ReferralRewardDays      int
 	ReferralSignupBonusDays int
+	PanelSubURL             string
 
-	YookassaShopID          string
-	YookassaSecretKey       string
-	YookassaAPIURL          string
-	YookassaReturnURL       string
-	YookassaTestMode        bool
-	YookassaWebhookSecret   string
+	YookassaShopID        string
+	YookassaSecretKey     string
+	YookassaAPIURL        string
+	YookassaReturnURL     string
+	YookassaTestMode      bool
+	YookassaWebhookSecret string
 }
 
 func Load() (*Config, error) {
@@ -74,6 +75,7 @@ func Load() (*Config, error) {
 		ExpiryNotifyDays:        viper.GetInt("expiry_notify_days"),
 		ReferralRewardDays:      viper.GetInt("referral_reward_days"),
 		ReferralSignupBonusDays: viper.GetInt("referral_signup_bonus_days"),
+		PanelSubURL:             viper.GetString("panel_sub_url"),
 		YookassaShopID:          viper.GetString("yookassa_shop_id"),
 		YookassaSecretKey:       viper.GetString("yookassa_secret_key"),
 		YookassaAPIURL:          viper.GetString("yookassa_api_url"),
