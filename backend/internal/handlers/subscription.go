@@ -69,6 +69,17 @@ func (h *Handler) rewritePanelLinks(links []string) []string {
 	return links
 }
 
+func (h *Handler) getSubBaseURL() string {
+	baseSubURL := h.cfg.PanelSubURL
+	if baseSubURL == "" {
+		baseSubURL = h.cfg.PanelPublicURL
+	}
+	if baseSubURL == "" {
+		baseSubURL = h.cfg.PanelURL
+	}
+	return strings.TrimRight(baseSubURL, "/")
+}
+
 func (h *Handler) getSubscription(c *gin.Context) {
 	userID, ok := userIDFromContext(c)
 	if !ok {
@@ -81,11 +92,7 @@ func (h *Handler) getSubscription(c *gin.Context) {
 		return
 	}
 
-	publicURL := h.cfg.PanelPublicURL
-	if publicURL == "" {
-		publicURL = h.cfg.PanelURL
-	}
-	subURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.cfg.PanelSubURL, "/"), sub.PanelSubID.String)
+	subURL := fmt.Sprintf("%s/%s", h.getSubBaseURL(), sub.PanelSubID.String)
 
 	c.JSON(http.StatusOK, gin.H{
 		"subscription_url": subURL,
@@ -140,11 +147,7 @@ func (h *Handler) getSingBoxConfig(c *gin.Context) {
 		return
 	}
 
-	publicURL := h.cfg.PanelPublicURL
-	if publicURL == "" {
-		publicURL = h.cfg.PanelURL
-	}
-	subURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.cfg.PanelSubURL, "/"), sub.PanelSubID.String)
+	subURL := fmt.Sprintf("%s/%s", h.getSubBaseURL(), sub.PanelSubID.String)
 
 	resp, err := http.Get(subURL)
 	if err != nil {
@@ -163,7 +166,7 @@ func (h *Handler) getSingBoxConfig(c *gin.Context) {
 	}
 
 	internalHost := extractHost(h.cfg.PanelURL)
-	publicURL = h.cfg.PanelPublicURL
+	publicURL := h.cfg.PanelPublicURL
 	if publicURL == "" {
 		publicURL = h.cfg.PanelURL
 	}
@@ -188,27 +191,29 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 
 	sub, err := h.store.GetUserSubscription(ctx, userID)
 	if err == nil && sub.Status == "active" {
-		if sub.PanelSubID.String == "" {
-			clientInfo, getErr := h.panel.GetClient(ctx, sub.PanelEmail)
-			if getErr == nil && clientInfo.SubID != "" {
+		clientInfo, getErr := h.panel.GetClient(ctx, sub.PanelEmail)
+		if getErr == nil {
+			if sub.PanelSubID.String == "" && clientInfo.SubID != "" {
 				sub.PanelSubID = sql.NullString{String: clientInfo.SubID, Valid: true}
 				h.store.UpdateSubscriptionSubID(ctx, sub.ID, clientInfo.SubID)
 			}
-		}
-		// Renew a subscription that has no expiry yet or has already expired.
-		if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(utils.NowMSK()) {
-			if rerr := h.renewSubscription(ctx, sub); rerr != nil {
-				h.log.Errorw("activate: renew error", "userID", maskInt(userID), "error", rerr)
+
+			if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(utils.NowMSK()) {
+				if rerr := h.renewSubscription(ctx, sub); rerr != nil {
+					h.log.Errorw("activate: renew error", "userID", maskInt(userID), "error", rerr)
+				}
 			}
 		}
+
 		links, _ := h.panel.GetLinks(ctx, sub.PanelEmail)
 		links = h.rewritePanelLinks(links)
-		publicURL := h.cfg.PanelPublicURL
-		if publicURL == "" {
-			publicURL = h.cfg.PanelURL
+
+		subID := sub.PanelSubID.String
+		if subID == "" && clientInfo != nil {
+			subID = clientInfo.SubID
 		}
-		subURL := fmt.Sprintf("%s/%s", strings.TrimRight(h.cfg.PanelSubURL, "/"), clientInfo.SubID)
-		
+		subURL := fmt.Sprintf("%s/%s", h.getSubBaseURL(), subID)
+
 		var vlessLink string
 		for _, link := range links {
 			if strings.HasPrefix(link, "vless://") {
@@ -235,29 +240,24 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 
 	panelEmail := user.Username
-	if user.TelegramID.Valid {
-		panelEmail = user.Username
-	}
-
-	var addClientInfo *panel.ClientInfo
 	expiryMs := utils.NowMSK().AddDate(0, 0, h.cfg.DefaultSubscriptionDays).UnixMilli()
 
-	// Проверяем, существует ли клиент
+	var clientInfo *panel.ClientInfo
+
 	existingClient, err := h.panel.GetClient(ctx, panelEmail)
 	if err != nil {
 		h.log.Debugw("activate: creating client in panel", "email", maskStr(panelEmail), "error", err)
-		addClientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
+		clientInfo, err = h.panel.AddClient(ctx, panelEmail, 0, expiryMs, h.cfg.DefaultInboundIDs)
 		if err != nil {
 			h.log.Errorw("activate: AddClient error", "email", maskStr(panelEmail), "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create client in panel"})
 			return
 		}
 	} else {
-		// Клиент существует, обновляем ему срок и субсидию
 		h.log.Debugw("activate: updating existing client in panel", "email", maskStr(panelEmail))
 		subID := existingClient.SubID
 		if subID == "" {
-			subID = panel.RandomSubID() // Генерируем новый, если пустой
+			subID = panel.RandomSubID()
 		}
 		err = h.panel.UpdateClient(ctx, panelEmail, subID, expiryMs, h.cfg.DefaultInboundIDs)
 		if err != nil {
@@ -265,6 +265,8 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update client in panel"})
 			return
 		}
+		clientInfo = existingClient
+		clientInfo.SubID = subID
 	}
 
 	if err := h.panel.AddToGroup(ctx, []string{panelEmail}, h.cfg.DefaultGroup); err != nil {
@@ -274,11 +276,7 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 	h.log.Infow("activate: AddToGroup ok", "email", maskStr(panelEmail), "group", h.cfg.DefaultGroup)
 
-	var clientInfo *panel.ClientInfo
-	if addClientInfo != nil && addClientInfo.SubID != "" {
-		clientInfo = addClientInfo
-	} else {
-		var err error
+	if clientInfo == nil || clientInfo.SubID == "" {
 		clientInfo, err = h.panel.GetClient(ctx, panelEmail)
 		if err != nil {
 			h.log.Errorw("activate: GetClient error", "email", maskStr(panelEmail), "error", err)
@@ -303,13 +301,10 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 	}
 	h.log.Infow("activate: CreateSubscription ok", "userID", maskInt(userID), "subId", clientInfo.SubID)
 
-	publicURL := h.cfg.PanelPublicURL
-	if publicURL == "" {
-		publicURL = h.cfg.PanelURL
-	}
+	subURL := fmt.Sprintf("%s/%s", h.getSubBaseURL(), clientInfo.SubID)
+
 	links, _ := h.panel.GetLinks(ctx, panelEmail)
 	links = h.rewritePanelLinks(links)
-	subURL := fmt.Sprintf("%s/sub/%s", strings.TrimRight(publicURL, "/"), clientInfo.SubID)
 
 	var vlessLink string
 	for _, link := range links {
