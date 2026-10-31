@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/server ./cmd
 
 FROM alpine:3.19
-RUN apk --no-cache add ca-certificates=20250911-r0 curl
+RUN apk --no-cache add ca-certificates
 WORKDIR /app
 
 COPY --from=builder /app/server /app/server

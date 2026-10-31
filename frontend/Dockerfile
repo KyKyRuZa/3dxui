@@ -1,5 +1,5 @@
 FROM node:24-alpine AS builder
-RUN apk add --no-cache git=2.54.0-r0
+RUN apk add --no-cache git
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
