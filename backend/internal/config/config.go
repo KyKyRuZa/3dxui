@@ -91,7 +91,7 @@ func Load() (*Config, error) {
 		cfg.DefaultGroup = "Free"
 	}
 	if cfg.DefaultSubscriptionDays == 0 {
-		cfg.DefaultSubscriptionDays = 2
+		cfg.DefaultSubscriptionDays = 3
 	}
 	if cfg.ExpiryNotifyDays == 0 {
 		cfg.ExpiryNotifyDays = cfg.DefaultSubscriptionDays

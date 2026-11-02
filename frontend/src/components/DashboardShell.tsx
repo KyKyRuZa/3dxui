@@ -52,7 +52,7 @@ export default function DashboardShell() {
             {location.pathname === "/dashboard/settings" && "Настройки"}
           </div>
           <div className={styles.headerStatus}>
-            <span className="dot" /> Активна
+            <span className="dot" /> Управление доступом
           </div>
         </header>
         <main className={styles.content}>

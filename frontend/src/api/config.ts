@@ -1,7 +1,6 @@
 import api from "./axios";
 
 export interface PublicConfig {
-  yookassa_test_mode: boolean;
   bot_username: string;
 }
 

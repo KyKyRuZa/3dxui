@@ -80,3 +80,18 @@
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
 }
+
+.kicker { margin-bottom: 12px; color: #168f83; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
+.wrap { max-width: 900px; padding-top: 54px; padding-bottom: 70px; }
+.card { border-radius: 16px; padding: clamp(24px, 5vw, 50px); box-shadow: 0 1px 2px rgba(19,42,61,.04); }
+.card::before { display: none; }
+.card h1 { color: #172b40; font-family: var(--font-display); font-size: clamp(28px, 4vw, 40px); text-transform: none; letter-spacing: -.045em; }
+.card h2 { color: #20394d; font-family: var(--font-display); font-size: 17px; text-transform: none; letter-spacing: -.02em; }
+.card p, .card li { color: #5e7386; font-size: 14px; line-height: 1.78; }
+.card ul { padding-left: 22px; }
+.card li::marker { color: #159b8c; }
+.lastUpdated { font-family: var(--font-body); letter-spacing: 0; }
+
+:global([data-theme="dark"]) .card { background: var(--color-surface); border-color: var(--color-border); box-shadow: none; }
+:global([data-theme="dark"]) .card h1, :global([data-theme="dark"]) .card h2 { color: var(--color-text); }
+:global([data-theme="dark"]) .card p, :global([data-theme="dark"]) .card li { color: var(--color-muted); }

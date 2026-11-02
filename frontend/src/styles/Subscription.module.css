@@ -84,7 +84,7 @@
 .configCard {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(22, 25, 34, 0.6) 100%);
+  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(247, 250, 252, 0.72) 100%);
   padding: var(--space-6);
   position: relative;
   overflow: hidden;
@@ -179,7 +179,7 @@
 }
 
 .linkBox:hover {
-  border-color: rgba(212, 168, 67, 0.3);
+  border-color: rgba(21, 155, 140, 0.3);
 }
 
 .actions {
@@ -228,3 +228,6 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+:global([data-theme="dark"]) .configCard { background: linear-gradient(135deg, var(--color-surface), rgba(21, 40, 58, .82)); border-color: var(--color-border); }
+:global([data-theme="dark"]) .qrWrap { background: #0b1520; border-color: var(--color-border); }

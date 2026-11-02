@@ -89,12 +89,12 @@ export default function Subscription() {
             <div className={styles.statusTitle}>Подписка истекла</div>
           </div>
           <p className={styles.statusMeta}>
-            Вы снова без защиты. Верните доступ одним тапом: купите тариф и получите готовый конфиг за минуту.
-            Или пригласите друга и получите <strong>+7 дней бесплатно</strong>.
+            Срок доступа завершён. Выберите подходящий тариф, чтобы продолжить пользоваться защищённым подключением.
+            Также можно пригласить друга и получить <strong>+7 дней доступа</strong>.
           </p>
           <div className={styles.actions}>
           <Button onClick={() => navigate("/pricing")}>
-            <IconKey size={18} /> Купить ключ VPN
+            <IconKey size={18} /> Выбрать тариф
           </Button>
           </div>
         </div>

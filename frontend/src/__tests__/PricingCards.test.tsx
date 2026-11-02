@@ -3,10 +3,8 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import PricingCards from "@components/PricingCards";
 import * as billingApi from "@api/billing";
-import * as configApi from "@api/config";
 
 vi.mock("@api/billing");
-vi.mock("@api/config");
 
 const mockPlans: billingApi.Plan[] = [
   { id: "standard", name: "Standard", duration_days: 30, price_minor: 29900, currency: "RUB", group_name: "Free" },
@@ -23,16 +21,12 @@ const renderPricingCards = () =>
 describe("PricingCards", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(configApi.getPublicConfig).mockResolvedValue({
-      yookassa_test_mode: false,
-      bot_username: "TestBot",
-    });
   });
 
   it("renders loading state initially", () => {
     vi.mocked(billingApi.getPlans).mockImplementation(() => new Promise(() => {}));
     renderPricingCards();
-    expect(screen.getByText("Загрузка тарифов…")).toBeDefined();
+    expect(screen.getByText("Загружаем варианты подписки…")).toBeDefined();
   });
 
   it("renders plans after loading", async () => {
@@ -60,30 +54,17 @@ describe("PricingCards", () => {
     renderPricingCards();
 
     await waitFor(() => {
-      expect(screen.getByText(/30 дней/)).toBeDefined();
-      expect(screen.getByText(/90 дней/)).toBeDefined();
+      expect(screen.getAllByText(/30 дней/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/90 дней/).length).toBeGreaterThan(0);
     });
   });
 
-  it("shows test mode badge when yookassa_test_mode is true", async () => {
-    vi.mocked(billingApi.getPlans).mockResolvedValueOnce(mockPlans);
-    vi.mocked(configApi.getPublicConfig).mockResolvedValueOnce({
-      yookassa_test_mode: true,
-      bot_username: "TestBot",
-    });
-    renderPricingCards();
-
-    await waitFor(() => {
-      expect(screen.getByText(/Тестовый режим оплаты/)).toBeDefined();
-    });
-  });
-
-  it("does not show test mode badge when yookassa_test_mode is false", async () => {
+  it("does not display internal payment configuration", async () => {
     vi.mocked(billingApi.getPlans).mockResolvedValueOnce(mockPlans);
     renderPricingCards();
-
     await waitFor(() => {
-      expect(screen.queryByText(/Тестовый режим оплаты/)).toBeNull();
+      expect(screen.getByText("Standard")).toBeDefined();
+      expect(screen.queryByText(/тестовый режим|служебная конфигурация/i)).toBeNull();
     });
   });
 
@@ -92,7 +73,7 @@ describe("PricingCards", () => {
     renderPricingCards();
 
     await waitFor(() => {
-      expect(screen.getByText("Не удалось загрузить тарифы")).toBeDefined();
+      expect(screen.getByText("Не удалось загрузить тарифы. Попробуйте обновить страницу.")).toBeDefined();
     });
   });
 
@@ -100,11 +81,11 @@ describe("PricingCards", () => {
     vi.mocked(billingApi.getPlans).mockResolvedValueOnce(mockPlans);
     vi.mocked(billingApi.createPayment).mockResolvedValueOnce({
       payment_id: "pay_123",
-      confirmation_url: "https://yookassa.ru/pay/123",
+      confirmation_url: "https://checkout.example.com/pay/123",
       status: "pending",
     });
 
-    const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+    const windowOpenSpy = vi.spyOn(window, "open").mockImplementation(() => window);
 
     renderPricingCards();
 
@@ -112,12 +93,12 @@ describe("PricingCards", () => {
       expect(screen.getByText("Standard")).toBeDefined();
     });
 
-    const buyButtons = screen.getAllByText("Купить");
+    const buyButtons = screen.getAllByText("Выбрать тариф");
     fireEvent.click(buyButtons[0]);
 
     await waitFor(() => {
       expect(billingApi.createPayment).toHaveBeenCalledWith("standard");
-      expect(windowOpenSpy).toHaveBeenCalledWith("https://yookassa.ru/pay/123", "_blank", "noopener");
+      expect(windowOpenSpy).toHaveBeenCalledWith("https://checkout.example.com/pay/123", "_blank", "noopener,noreferrer");
     });
 
     windowOpenSpy.mockRestore();
@@ -127,10 +108,10 @@ describe("PricingCards", () => {
     vi.mocked(billingApi.getPlans).mockResolvedValueOnce(mockPlans);
     vi.mocked(billingApi.createPayment).mockResolvedValueOnce({
       payment_id: "pay_123",
-      confirmation_url: "https://yookassa.ru/pay/123",
+      confirmation_url: "https://checkout.example.com/pay/123",
       status: "pending",
     });
-    vi.spyOn(window, "open").mockImplementation(() => null);
+    vi.spyOn(window, "open").mockImplementation(() => window);
 
     renderPricingCards();
 
@@ -138,10 +119,11 @@ describe("PricingCards", () => {
       expect(screen.getByText("Standard")).toBeDefined();
     });
 
-    fireEvent.click(screen.getAllByText("Купить")[0]);
+    fireEvent.click(screen.getAllByText("Выбрать тариф")[0]);
 
     await waitFor(() => {
-      expect(screen.getByText(/Открыта страница оплаты ЮKassa/)).toBeDefined();
+      expect(screen.getByText(/Ссылка на оплату подготовлена/)).toBeDefined();
+      expect(screen.getByText("Открыть страницу оплаты")).toBeDefined();
     });
   });
 
@@ -155,10 +137,10 @@ describe("PricingCards", () => {
       expect(screen.getByText("Standard")).toBeDefined();
     });
 
-    fireEvent.click(screen.getAllByText("Купить")[0]);
+    fireEvent.click(screen.getAllByText("Выбрать тариф")[0]);
 
     await waitFor(() => {
-      expect(screen.getByText("Не удалось создать платёж. Попробуйте позже.")).toBeDefined();
+      expect(screen.getByText("Не удалось подготовить оплату. Попробуйте позже.")).toBeDefined();
     });
   });
 });

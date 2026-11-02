@@ -22,7 +22,7 @@
 
 .card {
   border: 1px solid var(--color-border);
-  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(22, 25, 34, 0.6) 100%);
+  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(247, 250, 252, 0.72) 100%);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   position: relative;
@@ -40,7 +40,7 @@
 }
 
 .card:hover {
-  border-color: rgba(212, 168, 67, 0.15);
+  border-color: rgba(21, 155, 140, 0.15);
 }
 
 .cardHeader {
@@ -56,8 +56,8 @@
   width: 36px;
   height: 36px;
   border-radius: var(--radius-sm);
-  background: rgba(212, 168, 67, 0.08);
-  border: 1px solid rgba(212, 168, 67, 0.15);
+  background: rgba(21, 155, 140, 0.08);
+  border: 1px solid rgba(21, 155, 140, 0.15);
   display: grid;
   place-items: center;
   font-size: var(--text-lg);
@@ -224,7 +224,7 @@
 
 .tgButton:hover {
   transform: translateY(-1px);
-  box-shadow: 0 0 60px rgba(245, 158, 11, 0.25), var(--shadow-md);
+  box-shadow: 0 0 60px rgba(21, 155, 140, 0.25), var(--shadow-md);
 }
 
 .tgButton:disabled {
@@ -238,8 +238,8 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  background: rgba(245, 158, 11, 0.04);
-  border: 1px solid rgba(245, 158, 11, 0.15);
+  background: rgba(21, 155, 140, 0.04);
+  border: 1px solid rgba(21, 155, 140, 0.15);
   border-radius: var(--radius-md);
   animation: fadeInUp 0.3s ease;
 }
@@ -302,3 +302,9 @@
     transform: translateY(0);
   }
 }
+
+:global([data-theme="dark"]) .card { background: var(--color-surface); border-color: var(--color-border); }
+:global([data-theme="dark"]) .cardHeader { border-color: var(--color-border); }
+:global([data-theme="dark"]) .cardIcon { background: #17342f; border-color: #28574f; color: #7bd4c8; }
+:global([data-theme="dark"]) .confirm { background: rgba(237, 135, 144, .07); border-color: rgba(237, 135, 144, .18); }
+:global([data-theme="dark"]) .bindCode { background: rgba(89, 198, 182, .06); border-color: rgba(89, 198, 182, .22); }

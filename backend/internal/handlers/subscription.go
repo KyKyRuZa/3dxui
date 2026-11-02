@@ -121,13 +121,14 @@ func (h *Handler) getVLESSConfig(c *gin.Context) {
 
 	links = h.rewritePanelLinks(links)
 
-	var vlessLink string
+	var vlessLinks []string
 	for _, link := range links {
 		if strings.HasPrefix(link, "vless://") {
-			vlessLink = link
-			break
+			vlessLinks = append(vlessLinks, link)
 		}
 	}
+	// Склеиваем обе ссылки через перенос строки, чтобы клиент увидел обе
+	vlessLink := strings.Join(vlessLinks, "\n")
 
 	c.JSON(http.StatusOK, gin.H{
 		"config_url": vlessLink,
@@ -197,7 +198,6 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 				sub.PanelSubID = sql.NullString{String: clientInfo.SubID, Valid: true}
 				h.store.UpdateSubscriptionSubID(ctx, sub.ID, clientInfo.SubID)
 			}
-
 			if !sub.ExpiresAt.Valid || sub.ExpiresAt.Time.Before(utils.NowMSK()) {
 				if rerr := h.renewSubscription(ctx, sub); rerr != nil {
 					h.log.Errorw("activate: renew error", "userID", maskInt(userID), "error", rerr)
@@ -214,13 +214,13 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		}
 		subURL := fmt.Sprintf("%s/%s", h.getSubBaseURL(), subID)
 
-		var vlessLink string
+		var vlessLinks []string
 		for _, link := range links {
 			if strings.HasPrefix(link, "vless://") {
-				vlessLink = link
-				break
+				vlessLinks = append(vlessLinks, link)
 			}
 		}
+		vlessLink := strings.Join(vlessLinks, "\n")
 
 		c.JSON(http.StatusOK, gin.H{
 			"subscription_url": subURL,
@@ -274,7 +274,6 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add to group"})
 		return
 	}
-	h.log.Infow("activate: AddToGroup ok", "email", maskStr(panelEmail), "group", h.cfg.DefaultGroup)
 
 	if clientInfo == nil || clientInfo.SubID == "" {
 		clientInfo, err = h.panel.GetClient(ctx, panelEmail)
@@ -284,7 +283,6 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 			return
 		}
 	}
-	h.log.Infow("activate: GetClient ok", "email", maskStr(panelEmail), "subId", clientInfo.SubID, "inboundIds", clientInfo.InboundIDs)
 
 	sub = &models.Subscription{
 		UserID:     userID,
@@ -299,20 +297,19 @@ func (h *Handler) activateSubscription(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save subscription"})
 		return
 	}
-	h.log.Infow("activate: CreateSubscription ok", "userID", maskInt(userID), "subId", clientInfo.SubID)
 
 	subURL := fmt.Sprintf("%s/%s", h.getSubBaseURL(), clientInfo.SubID)
 
 	links, _ := h.panel.GetLinks(ctx, panelEmail)
 	links = h.rewritePanelLinks(links)
 
-	var vlessLink string
+	var vlessLinks []string
 	for _, link := range links {
 		if strings.HasPrefix(link, "vless://") {
-			vlessLink = link
-			break
+			vlessLinks = append(vlessLinks, link)
 		}
 	}
+	vlessLink := strings.Join(vlessLinks, "\n")
 
 	c.JSON(http.StatusOK, gin.H{
 		"subscription_url": subURL,

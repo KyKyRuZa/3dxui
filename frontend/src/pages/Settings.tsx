@@ -63,7 +63,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `walyny4-vpn-data-${Date.now()}.json`;
+      a.download = `walyny4-account-data-${Date.now()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       setSuccess("Данные экспортированы");
@@ -160,12 +160,12 @@ export default function Settings() {
         <div className={`${styles.card} ${styles.spanFull}`}>
           <div className={styles.cardHeader}>
             <div className={styles.cardIcon}><IconShield size={20} /></div>
-            <div className={styles.cardTitle}>Персональные данные (152-ФЗ)</div>
+            <div className={styles.cardTitle}>Управление персональными данными</div>
           </div>
           <div className={styles.form}>
             <p className={styles.hint}>
-              Вы имеете право на доступ к своим персональным данным и их удаление
-              в соответствии с Федеральным законом № 152-ФЗ «О персональных данных».
+              Вы можете выгрузить сведения, связанные с аккаунтом, или удалить аккаунт.
+              Перед удалением проверьте, что сохранили нужные данные.
             </p>
             <div className={styles.actions}>
               <button

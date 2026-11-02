@@ -29,13 +29,10 @@ type Client struct {
 }
 
 func New(baseURL, username, password, apiToken string, log *zap.SugaredLogger) *Client {
-	// Secure by default: TLS verification is enabled unless explicitly disabled
-	// via PANEL_INSECURE_SKIP_VERIFY=true (useful for self-signed certs in dev).
 	insecure := os.Getenv("PANEL_INSECURE_SKIP_VERIFY") == "true"
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: insecure},
 	}
-	// Use a cookie jar for username/password auth to persist session cookies.
 	jar, _ := cookiejar.New(nil)
 	return &Client{
 		baseURL:    strings.TrimRight(baseURL, "/"),
@@ -97,6 +94,7 @@ func (c *Client) Login(ctx context.Context) error {
 	}
 	return nil
 }
+
 func RandomSubID() string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, 16)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { IconReceipt, IconCurrencyRuble } from "@tabler/icons-react";
+import { IconReceipt } from "@tabler/icons-react";
 import { getBillingHistory, type PaymentHistoryItem } from "@api/billing";
 import styles from "@styles/BillingHistory.module.css";
 
@@ -29,10 +29,11 @@ function formatDate(iso: string): string {
   });
 }
 
-function formatAmount(minor: number, currency: string): string {
-  const major = (minor / 100).toFixed(2);
-  const sym = currency === "RUB" ? "₽" : currency;
-  return `${major} ${sym}`;
+function formatAmount(minor: number): string {
+  return (minor / 100).toLocaleString("ru-RU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export default function BillingHistory() {
@@ -84,8 +85,7 @@ export default function BillingHistory() {
                   <td>{p.plan_name}</td>
                   <td>
                     <span className={styles.cellAmount}>
-                      <IconCurrencyRuble size={14} stroke={2.5} />
-                      {formatAmount(p.amount_minor, p.currency)}
+                      {formatAmount(p.amount_minor)}
                     </span>
                   </td>
                   <td>

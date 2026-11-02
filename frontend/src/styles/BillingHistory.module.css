@@ -111,3 +111,9 @@
   color: #dc2626;
   padding: var(--space-3) 0;
 }
+
+:global([data-theme="dark"]) .table th, :global([data-theme="dark"]) .table td { border-color: var(--color-border); }
+:global([data-theme="dark"]) .table tbody tr:hover td { background: #172d40; }
+:global([data-theme="dark"]) .statusSucceeded { color: #79d6af; }
+:global([data-theme="dark"]) .statusPending { color: #e9c36a; }
+:global([data-theme="dark"]) .statusCanceled, :global([data-theme="dark"]) .statusFailed { color: #ed929a; }

@@ -207,7 +207,7 @@ export default function Admin() {
     }
   };
 
-  const fmtPrice = (v: number) => `${(v / 100).toFixed(2)} ₽`;
+  const fmtPrice = (v: number) => (v / 100).toLocaleString("ru-RU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const fmtDate = (v: string) => (v ? new Date(v).toLocaleString("ru-RU") : "—");
 
   if (!authed) {
@@ -289,11 +289,6 @@ export default function Admin() {
             min={0}
           />
           <input
-            placeholder="Валюта"
-            value={planForm.currency}
-            onChange={(e) => setPlanForm({ ...planForm, currency: e.target.value })}
-          />
-          <input
             placeholder="Группа"
             value={planForm.group_name}
             onChange={(e) => setPlanForm({ ...planForm, group_name: e.target.value })}
@@ -318,7 +313,6 @@ export default function Admin() {
                 <th>name</th>
                 <th>days</th>
                 <th>price</th>
-                <th>currency</th>
                 <th>group</th>
                 <th className={styles.actionsCell}>actions</th>
               </tr>
@@ -330,7 +324,6 @@ export default function Admin() {
                   <td>{p.name}</td>
                   <td>{p.duration_days}</td>
                   <td>{fmtPrice(p.price_minor)}</td>
-                  <td>{p.currency}</td>
                   <td>{p.group_name}</td>
                   <td className={styles.actionsCell}>
                     <button onClick={() => startEditPlan(p)}>Редактировать</button>
@@ -342,7 +335,7 @@ export default function Admin() {
               ))}
               {!plans.length && (
                 <tr>
-                  <td colSpan={7} className={styles.empty}>
+                  <td colSpan={6} className={styles.empty}>
                     Тарифы не найдены
                   </td>
                 </tr>

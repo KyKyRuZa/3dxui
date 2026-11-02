@@ -23,7 +23,6 @@ describe("AuthForm", () => {
     vi.clearAllMocks();
     vi.mocked(authApi.refresh).mockRejectedValueOnce(new Error("not logged in"));
     vi.mocked(configApi.getPublicConfig).mockResolvedValue({
-      yookassa_test_mode: false,
       bot_username: "TestBot",
     });
   });
@@ -122,7 +121,7 @@ describe("AuthForm", () => {
     fireEvent.click(registerBtn);
 
     await waitFor(() => {
-      expect(screen.getByText(/Для регистрации необходимо/)).toBeDefined();
+      expect(screen.getByText(/Подтвердите согласие/)).toBeDefined();
     });
   });
 
@@ -160,6 +159,7 @@ describe("AuthForm", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/auth/register", expect.objectContaining({
         method: "POST",
+        body: expect.stringContaining('"consent_hash":"c8dfd65a177302503475b72b7eda54e0d3691344404e006786441d4f8787b716"'),
       }));
     });
   });

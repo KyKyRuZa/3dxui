@@ -1,46 +1,41 @@
+import { Link } from "react-router-dom";
+import { IconArrowUpRight, IconBolt, IconShieldCheck, IconUser } from "@tabler/icons-react";
 import { useAuth } from "@hooks/useAuth";
-import { IconBolt } from "@tabler/icons-react";
 import styles from "@styles/DashboardOverview.module.css";
 
 export default function DashboardOverview() {
   const { user } = useAuth();
-
-  const metrics = [
-    { label: "Пользователь", value: user?.username ?? "—" },
-    { label: "Email", value: user?.email ?? "—" },
-  ];
-
   return (
     <div className={styles.root}>
-      <div className={styles.kpis}>
-        {metrics.map((m, i) => (
-          <div 
-            key={m.label} 
-            className={styles.kpi}
-            style={{ animationDelay: `${i * 0.08}s` }}
-          >
-            <div className={styles.kpiLabel}>{m.label}</div>
-            <div className={styles.kpiValue}>{m.value}</div>
-          </div>
-        ))}
+      <div className={styles.intro}>
+        <div className={styles.kicker}>ОБЗОР АККАУНТА</div>
+        <h1>Добро пожаловать{user?.username ? `, ${user.username}` : ""}</h1>
+        <p>Управляйте подпиской, настройками подключения и устройствами в одном месте.</p>
       </div>
 
-      <div className={`section ${styles.sectionFlush}`}>
-        <div className="card">
-          <div className={styles.quickStart}>
-            <div className={styles.quickStartHeader}>
-              <div className={styles.quickStartIcon}>
-              <IconBolt size={20} stroke={2} />
-            </div>
-              <div className={styles.cardTitle}>Быстрый старт</div>
-            </div>
-            <ol className={styles.steps}>
-              <li>Установите клиентское приложение на ваше устройство</li>
-              <li>Импортируйте ссылку из раздела «Подписка»</li>
-              <li>Подключитесь к любому серверу</li>
-            </ol>
-          </div>
+      <div className={styles.kpis}>
+        <div className={styles.kpi}>
+          <span className={styles.kpiIcon}><IconUser size={18} /></span>
+          <div><div className={styles.kpiLabel}>Пользователь</div><div className={styles.kpiValue}>{user?.username ?? "—"}</div></div>
         </div>
+        <div className={styles.kpi}>
+          <span className={styles.kpiIcon}><IconShieldCheck size={18} /></span>
+          <div><div className={styles.kpiLabel}>Профиль подключения</div><div className={styles.kpiValue}>Управление доступом</div></div>
+        </div>
+      </div>
+
+      <section className={styles.quickStart}>
+        <div className={styles.quickStartIcon}><IconBolt size={21} /></div>
+        <div className={styles.quickStartCopy}>
+          <h2>Начните с настройки подключения</h2>
+          <p>Получите персональную ссылку и QR-код, затем добавьте профиль в совместимое приложение.</p>
+          <Link to="/dashboard/subscription">Открыть подписку <IconArrowUpRight size={16} /></Link>
+        </div>
+      </section>
+
+      <div className={styles.bottomLinks}>
+        <Link to="/dashboard/instructions"><span>01</span><strong>Инструкции для устройств</strong><IconArrowUpRight size={16} /></Link>
+        <Link to="/dashboard/settings"><span>02</span><strong>Настройки аккаунта</strong><IconArrowUpRight size={16} /></Link>
       </div>
     </div>
   );

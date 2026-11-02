@@ -106,7 +106,7 @@
 .copyIconBtn:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
-  background: rgba(212, 168, 67, 0.08);
+  background: rgba(21, 155, 140, 0.08);
 }
 
 .actions {

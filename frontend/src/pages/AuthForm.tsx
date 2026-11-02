@@ -13,7 +13,14 @@ interface LinkResponse {
 	expires_in: number;
 }
 
-export default function AuthForm() {
+type AuthMode = "login" | "register";
+type AuthFormProps = { initialMode?: AuthMode };
+
+// SHA-256 fingerprint of the accepted privacy-policy revision. Update this value
+// whenever the published policy changes so the consent record remains versioned.
+const PRIVACY_POLICY_CONSENT_HASH = "c8dfd65a177302503475b72b7eda54e0d3691344404e006786441d4f8787b716";
+
+export default function AuthForm({ initialMode = "login" }: AuthFormProps) {
 	const navigate = useNavigate();
 	const { isAuthenticated } = useAuth();
 	const [error, setError] = useState("");
@@ -24,7 +31,7 @@ export default function AuthForm() {
 	const tokenRef = useRef<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-	const [mode, setMode] = useState<"login" | "register">("login");
+	const [mode, setMode] = useState<AuthMode>(initialMode);
 	const [username, setUsername] = useState("");
 	const [password, setPassword] = useState("");
 	const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +79,7 @@ export default function AuthForm() {
 			return;
 		}
 		if (isRegister && !consent) {
-			setError("Для регистрации необходимо согласие на обработку персональных данных.");
+			setError("Подтвердите согласие на обработку персональных данных для создания аккаунта.");
 			return;
 		}
 		setError("");
@@ -82,7 +89,11 @@ export default function AuthForm() {
 			const res = await fetch(endpoint, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ username, password }),
+				body: JSON.stringify({
+					username,
+					password,
+					...(isRegister ? { consent_hash: PRIVACY_POLICY_CONSENT_HASH } : {}),
+				}),
 			});
 			const data = await res.json();
 			if (!res.ok) {
@@ -90,7 +101,7 @@ export default function AuthForm() {
 				return;
 			}
 			setAccessToken(data.access_token);
-			window.location.href = "/dashboard";
+			window.location.href = isRegister ? "/dashboard/subscription" : "/dashboard";
 		} catch {
 			setError("Ошибка сети. Попробуйте позже.");
 		} finally {
